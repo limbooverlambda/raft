@@ -14,19 +14,29 @@ import (
 )
 
 type Follower interface {
-	Run()
+	Run() FollowerCompletionChan
 }
 
 type FollowerTrigger struct{}
 
+type FollowerCompletionChan <- chan struct{}
+
 func NewFollower(ctx context.Context,
 	followerTrigger <-chan FollowerTrigger,
 	candidateTrigger chan<- CandidateTrigger,
+	transport transport.Transport,
+	raftTimer timer.RaftTimer,
+	raftLog raftlog.RaftLog,
+	raftVoter voter.RaftVoter,
 ) Follower {
 	return &follower{
 		context:          ctx,
 		followerTrigger:  followerTrigger,
 		candidateTrigger: candidateTrigger,
+		transport:        transport,
+		raftTimer:        raftTimer,
+		raftLog:          raftLog,
+		raftVoter:        raftVoter,
 	}
 }
 
@@ -40,13 +50,14 @@ type follower struct {
 	raftVoter        voter.RaftVoter
 }
 
-func (f *follower) Run() {
+func (f *follower) Run() FollowerCompletionChan {
+	followerCompletionChan := make(chan struct{})
+	defer close(followerCompletionChan)
 	go func() {
 		fmt.Println("Follower running..")
 		ticker := time.NewTicker(rconfig.PollDuration * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			log.Println("Follower ticking")
 			select {
 			case <-f.context.Done():
 				log.Println("Cancelling Follower")
@@ -59,6 +70,7 @@ func (f *follower) Run() {
 			}
 		}
 	}()
+	return followerCompletionChan
 }
 
 func (f *follower) startFollower() {

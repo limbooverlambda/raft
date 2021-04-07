@@ -16,7 +16,7 @@ type Candidate interface {
 
 func NewCandidate(ctx context.Context,
 	leaderTrigger chan<- LeaderTrigger,
-	candidateTrigger <-chan CandidateTrigger) Follower {
+	candidateTrigger <-chan CandidateTrigger) Candidate {
 	return &candidate{
 		context:          ctx,
 		leaderTrigger:    leaderTrigger,

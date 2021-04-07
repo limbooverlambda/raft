@@ -15,7 +15,7 @@ type Leader interface {
 type LeaderTrigger struct {}
 
 func NewLeader(ctx context.Context,
-	leaderTrigger <- chan LeaderTrigger) Follower {
+	leaderTrigger <- chan LeaderTrigger) Leader {
 	return &leader{
 		context: ctx,
 		leaderTrigger: leaderTrigger,
