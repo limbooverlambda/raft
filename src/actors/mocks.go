@@ -4,10 +4,20 @@ import (
 	"time"
 
 	"kitengo/raft/log"
+	"kitengo/raft/term"
 	"kitengo/raft/timer"
 	"kitengo/raft/transport"
 	"kitengo/raft/voter"
 )
+
+type candidateStub struct {
+	fakeTransport fakeTransport
+	fakeTimer     fakeTimer
+	fakeLog       fakeLog
+	fakeVoter     fakeVoter
+	fakeTerm      fakeTerm
+	leaderTrigger chan<- LeaderTrigger
+}
 
 type fakeTransport struct {
 	GetRequestChanFn func() <-chan transport.Request
@@ -52,6 +62,25 @@ func (fl fakeLog) AppendEntry(entry []byte) {
 }
 
 type fakeVoter struct {
+	RequestVoteFn func(term int64) <-chan voter.VoteStatus
 	voter.RaftVoter
+}
+
+func (fv fakeVoter) RequestVote(term int64) <-chan voter.VoteStatus {
+	return fv.RequestVoteFn(term)
+}
+
+type fakeTerm struct {
+	term.RaftTerm
+	GetTermFn func() int64
+	IncrementTermFn func() int64
+}
+
+func (fterm fakeTerm) GetTerm() int64 {
+	return fterm.GetTermFn()
+}
+
+func (fterm fakeTerm) IncrementTerm() int64 {
+	return fterm.IncrementTermFn()
 }
 

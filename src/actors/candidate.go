@@ -54,7 +54,6 @@ func (f *candidate) Run() CandidateCompletionChan {
 		defer ticker.Stop()
 		fmt.Println("Candidate running...")
 		for range ticker.C {
-			fmt.Println("Candidate ticking")
 			select {
 			case <-f.context.Done():
 				fmt.Println("Cancelling Candidate")
@@ -92,8 +91,9 @@ func (f *candidate) startCandidate() {
 	}
 }
 
-func (f *candidate) startElection(ctx context.Context) <-chan struct{} {
-	electionCompletionChan := make(chan struct{})
+type electionCompletionChan <-chan struct{}
+func (f *candidate) startElection(ctx context.Context) electionCompletionChan {
+	ecChan := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(rconfig.PollDuration * time.Second)
 		defer ticker.Stop()
@@ -103,28 +103,47 @@ func (f *candidate) startElection(ctx context.Context) <-chan struct{} {
 			select {
 			case <-ctx.Done():
 				log.Println("Cancelling election")
-				electionCompletionChan <- struct{}{}
+				ecChan <- struct{}{}
 				return
 			case voteStatus := <-voteStatusChan:
 				{
+					log.Printf("Got voteStatus %v\n", voteStatus)
 					switch voteStatus {
 					case voter.Leader:
-						f.leaderTrigger <- LeaderTrigger{}
-						electionCompletionChan <- struct{}{}
+						f.transitionToLeader(ctx, ecChan)
 						return
 					default:
 						//Split vote or loss: Do nothing, re-election will be triggered
 					}
 				}
 			default:
-				if f.raftTimer.GetDeadline().After(tick) {
+				if tick.After(f.raftTimer.GetDeadline()) {
+					log.Println("Deadline exceeded, restarting the election")
 					f.raftTimer.SetDeadline(tick)
 					voteStatusChan = f.callElection()
 				}
 			}
 		}
 	}()
-	return electionCompletionChan
+	return ecChan
+}
+
+func (f *candidate) transitionToLeader(ctxt context.Context, ecChan chan struct{}) {
+	go func() {
+		defer func() {
+			ecChan <- struct{}{}
+		}()
+		select {
+		case <-ctxt.Done():
+			{
+				log.Println("Cancelling transitioning to leader")
+				return
+			}
+		case f.leaderTrigger <- LeaderTrigger{}:
+			log.Println("Transitioned to leader")
+			return
+		}
+	}()
 }
 
 /*
