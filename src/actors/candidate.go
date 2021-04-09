@@ -52,7 +52,7 @@ func (f *candidate) Run() CandidateCompletionChan {
 		defer close(cChan)
 		ticker := time.NewTicker(rconfig.PollDuration * time.Second)
 		defer ticker.Stop()
-		fmt.Println("Candidate running...")
+		log.Println("Candidate running...")
 		for range ticker.C {
 			select {
 			case <-f.context.Done():
@@ -60,7 +60,17 @@ func (f *candidate) Run() CandidateCompletionChan {
 				return
 			case <-f.candidateTrigger:
 				fmt.Println("Candidate Triggered")
-				f.startCandidate()
+				sc := f.startCandidate()
+				select {
+				case <-sc:
+					{
+						return
+					}
+				case <-f.context.Done():
+					{
+						log.Println("Cancelling the candidate")
+					}
+				}
 			default:
 				fmt.Println("Candidate ticking...")
 			}
@@ -69,29 +79,38 @@ func (f *candidate) Run() CandidateCompletionChan {
 	return cChan
 }
 
-func (f *candidate) startCandidate() {
-	eChan := f.startElection(f.context)
-	for {
-		select {
-		case <- f.context.Done():
-			return
-		case <-eChan:
-			return
-		case appendEntryReq := <-f.raftAppendEntry.AppendEntryReqChan():
-			{
-				resp := f.raftAppendEntry.Process(appendEntryReq)
-				f.raftAppendEntry.AppendEntryRespChan() <- resp
-				if resp.Success {
-					//Append succeeded, flip back to being a follower
-					f.followerTrigger <- FollowerTrigger{}
-					return
+type candidateCompletionChan <-chan struct{}
+
+func (f *candidate) startCandidate() candidateCompletionChan {
+	cCompletionChan := make(chan struct{})
+	go func() {
+		defer close(cCompletionChan)
+		eChan := f.startElection(f.context)
+		for {
+			select {
+			case <-f.context.Done():
+				return
+			case <-eChan:
+				return
+			case appendEntryReq := <-f.raftAppendEntry.AppendEntryReqChan():
+				{
+					log.Println("Got an append entry request")
+					resp := f.raftAppendEntry.Process(appendEntryReq)
+					f.raftAppendEntry.AppendEntryRespChan() <- resp
+					if resp.Success {
+						//Append succeeded, flip back to being a follower
+						f.followerTrigger <- FollowerTrigger{}
+						return
+					}
 				}
 			}
 		}
-	}
+	}()
+	return cCompletionChan
 }
 
 type electionCompletionChan <-chan struct{}
+
 func (f *candidate) startElection(ctx context.Context) electionCompletionChan {
 	ecChan := make(chan struct{})
 	go func() {

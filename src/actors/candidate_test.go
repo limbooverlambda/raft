@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"kitengo/raft/rpc"
 	"kitengo/raft/voter"
 )
 
@@ -22,6 +23,63 @@ func Test_candidate_Run_WithCancellation(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	cancel()
 	<-c
+}
+
+func Test_candidate_startCandidateWithCancellation(t *testing.T) {
+	appendEntry := fakeAppendEntry{}
+	aeChan := make(chan rpc.AppendEntryRequest)
+	appendEntry.AppendEntryReqChanFn = func() <-chan rpc.AppendEntryRequest {
+		return aeChan
+	}
+	f := instantiateDefaultCandidate(candidateStub{
+		fakeAppendEntry: appendEntry,
+	})
+	ctxt, cancel := context.WithCancel(context.Background())
+	f.context = ctxt
+	time.AfterFunc(5 * time.Second, cancel)
+	c := f.startCandidate()
+	<- c
+}
+
+func Test_candidate_startCandidateWithAppendEntrySuccess(t *testing.T) {
+	appendEntry := fakeAppendEntry{}
+	aeChan := make(chan rpc.AppendEntryRequest)
+	followerTrigger := make(chan FollowerTrigger, 1)
+	appendEntry.AppendEntryReqChanFn = func() <-chan rpc.AppendEntryRequest {
+		go func() {
+			aeChan <- rpc.AppendEntryRequest{}
+		}()
+		return aeChan
+	}
+	appendEntry.ProcessFn = func(request rpc.AppendEntryRequest) rpc.AppendEntryResponse {
+		return rpc.AppendEntryResponse{
+			Success: true,
+		}
+	}
+	respChan := make(chan rpc.AppendEntryResponse, 1)
+	appendEntry.AppendEntryRespChanFn = func() chan<- rpc.AppendEntryResponse {
+		return respChan
+	}
+
+	rvoter := fakeVoter{}
+	rvoter.RequestVoteFn = func(term int64) <-chan voter.VoteStatus {
+		vChan := make(chan voter.VoteStatus)
+		defer close(vChan)
+		time.Sleep(10 * time.Second)
+		return vChan
+	}
+	f := instantiateDefaultCandidate(candidateStub{
+		fakeAppendEntry: appendEntry,
+		followerTrigger: followerTrigger,
+		fakeVoter: rvoter,
+	})
+	ctxt, cancel := context.WithCancel(context.Background())
+	f.context = ctxt
+	time.AfterFunc(5 * time.Second, cancel)
+	c := f.startCandidate()
+	<- c
+	<- followerTrigger
+
 }
 
 func Test_candidate_startElection_withLeaderSelectedHappyPath(t *testing.T) {
@@ -100,10 +158,13 @@ func instantiateDefaultCandidate(stub candidateStub) candidate {
 		stub.fakeVoter = raftVoter
 	}
 	f := candidate{
-		raftTimer:     stub.fakeTimer,
-		raftTerm:      stub.fakeTerm,
-		raftVoter:     stub.fakeVoter,
-		leaderTrigger: stub.leaderTrigger,
+		followerTrigger: stub.followerTrigger,
+		leaderTrigger:   stub.leaderTrigger,
+		raftTimer:       stub.fakeTimer,
+		raftTerm:        stub.fakeTerm,
+		raftVoter:       stub.fakeVoter,
+		raftAppendEntry: stub.fakeAppendEntry,
 	}
 	return f
 }
+

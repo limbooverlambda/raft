@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"kitengo/raft/log"
+	"kitengo/raft/rpc"
 	"kitengo/raft/term"
 	"kitengo/raft/timer"
 	"kitengo/raft/transport"
@@ -11,17 +12,19 @@ import (
 )
 
 type candidateStub struct {
-	fakeTransport fakeTransport
-	fakeTimer     fakeTimer
-	fakeLog       fakeLog
-	fakeVoter     fakeVoter
-	fakeTerm      fakeTerm
-	leaderTrigger chan<- LeaderTrigger
+	fakeTransport   fakeTransport
+	fakeTimer       fakeTimer
+	fakeLog         fakeLog
+	fakeVoter       fakeVoter
+	fakeTerm        fakeTerm
+	fakeAppendEntry fakeAppendEntry
+	leaderTrigger   chan<- LeaderTrigger
+	followerTrigger chan<- FollowerTrigger
 }
 
 type fakeTransport struct {
 	GetRequestChanFn func() <-chan transport.Request
-	SendResponseFn func(response transport.Response) error
+	SendResponseFn   func(response transport.Response) error
 	GetRequestTypeFn func(req transport.Request) transport.RequestType
 	transport.Transport
 }
@@ -72,7 +75,7 @@ func (fv fakeVoter) RequestVote(term int64) <-chan voter.VoteStatus {
 
 type fakeTerm struct {
 	term.RaftTerm
-	GetTermFn func() int64
+	GetTermFn       func() int64
 	IncrementTermFn func() int64
 }
 
@@ -84,3 +87,21 @@ func (fterm fakeTerm) IncrementTerm() int64 {
 	return fterm.IncrementTermFn()
 }
 
+type fakeAppendEntry struct {
+	AppendEntryReqChanFn  func() <-chan rpc.AppendEntryRequest
+	ProcessFn             func(request rpc.AppendEntryRequest) rpc.AppendEntryResponse
+	AppendEntryRespChanFn func() chan<- rpc.AppendEntryResponse
+	rpc.RaftAppendEntry
+}
+
+func (fae fakeAppendEntry) AppendEntryReqChan() <-chan rpc.AppendEntryRequest {
+	return fae.AppendEntryReqChanFn()
+}
+
+func (fae fakeAppendEntry) Process(request rpc.AppendEntryRequest) rpc.AppendEntryResponse {
+	return fae.ProcessFn(request)
+}
+
+func (fae fakeAppendEntry) AppendEntryRespChan() chan<- rpc.AppendEntryResponse {
+	return fae.AppendEntryRespChanFn()
+}
