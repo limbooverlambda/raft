@@ -19,7 +19,7 @@ type Follower interface {
 
 type FollowerTrigger struct{}
 
-type FollowerCompletionChan <- chan struct{}
+type FollowerCompletionChan <-chan struct{}
 
 func NewFollower(ctx context.Context,
 	followerTrigger <-chan FollowerTrigger,

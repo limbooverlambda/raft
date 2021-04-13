@@ -9,5 +9,5 @@ const (
 
 type RaftVoter interface {
 	ProcessVote(vote []byte) error
-	RequestVote(term int64) <- chan VoteStatus
+	RequestVote(term int64) <-chan VoteStatus
 }

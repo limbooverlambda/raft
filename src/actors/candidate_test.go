@@ -36,9 +36,9 @@ func Test_candidate_startCandidateWithCancellation(t *testing.T) {
 	})
 	ctxt, cancel := context.WithCancel(context.Background())
 	f.context = ctxt
-	time.AfterFunc(5 * time.Second, cancel)
+	time.AfterFunc(5*time.Second, cancel)
 	c := f.startCandidate()
-	<- c
+	<-c
 }
 
 func Test_candidate_startCandidateWithAppendEntrySuccess(t *testing.T) {
@@ -71,14 +71,14 @@ func Test_candidate_startCandidateWithAppendEntrySuccess(t *testing.T) {
 	f := instantiateDefaultCandidate(candidateStub{
 		fakeAppendEntry: appendEntry,
 		followerTrigger: followerTrigger,
-		fakeVoter: rvoter,
+		fakeVoter:       rvoter,
 	})
 	ctxt, cancel := context.WithCancel(context.Background())
 	f.context = ctxt
-	time.AfterFunc(5 * time.Second, cancel)
+	time.AfterFunc(5*time.Second, cancel)
 	c := f.startCandidate()
-	<- c
-	<- followerTrigger
+	<-c
+	<-followerTrigger
 
 }
 
@@ -94,7 +94,7 @@ func Test_candidate_startElection_withLeaderSelectedHappyPath(t *testing.T) {
 	if <-leaderTrigger != expectedLeaderTrigger {
 		t.Error("Expected completion signal but received something else")
 	}
-	<- ec
+	<-ec
 }
 
 func Test_candidate_startElection_withLeaderSelectedWithoutReceiver(t *testing.T) {
@@ -167,4 +167,3 @@ func instantiateDefaultCandidate(stub candidateStub) candidate {
 	}
 	return f
 }
-

@@ -13,10 +13,6 @@ import (
 	"kitengo/raft/voter"
 )
 
-//TODO: Write unit tests for the Candidate scaffolding
-//TODO: Add failure conditions for the unit test.
-//TODO: Figure out how the transport will be plugged into the server
-
 type CandidateTrigger struct{}
 
 type CandidateCompletionChan <-chan struct{}
