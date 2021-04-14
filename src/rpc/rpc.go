@@ -2,6 +2,7 @@ package rpc
 
 type AppendEntryRequest struct{}
 type AppendEntryResponse struct {
+	Term    int64
 	Success bool
 }
 
