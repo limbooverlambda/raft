@@ -1,129 +1,84 @@
 package actors
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"time"
 
-	raftlog "kitengo/raft/log"
 	"kitengo/raft/rconfig"
+	"kitengo/raft/rpc"
+	"kitengo/raft/state"
 	"kitengo/raft/timer"
-	"kitengo/raft/transport"
-	"kitengo/raft/voter"
 )
 
 type Follower interface {
-	Run() FollowerCompletionChan
+	Run()
 }
 
-type FollowerTrigger struct{}
-
-type FollowerCompletionChan <-chan struct{}
-
-func NewFollower(ctx context.Context,
-	followerTrigger <-chan FollowerTrigger,
-	candidateTrigger chan<- CandidateTrigger,
-	transport transport.Transport,
-	raftTimer timer.RaftTimer,
-	raftLog raftlog.RaftLog,
-	raftVoter voter.RaftVoter,
-) Follower {
-	return &follower{
-		context:          ctx,
-		followerTrigger:  followerTrigger,
-		candidateTrigger: candidateTrigger,
-		transport:        transport,
-		raftTimer:        raftTimer,
-		raftLog:          raftLog,
-		raftVoter:        raftVoter,
-	}
+type follower struct{
+	state state.RaftState
+	aeRPC rpc.RaftAppendEntry
+	voteRPC rpc.RaftRequestVote
+	raftTimer timer.RaftTimer
 }
 
-type follower struct {
-	context          context.Context
-	followerTrigger  <-chan FollowerTrigger
-	candidateTrigger chan<- CandidateTrigger
-	transport        transport.Transport
-	raftTimer        timer.RaftTimer
-	raftLog          raftlog.RaftLog
-	raftVoter        voter.RaftVoter
-}
-
-func (f *follower) Run() FollowerCompletionChan {
-	followerCompletionChan := make(chan struct{})
-	defer close(followerCompletionChan)
-	go func() {
-		fmt.Println("Follower running..")
-		ticker := time.NewTicker(rconfig.PollDuration * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			select {
-			case <-f.context.Done():
-				log.Println("Cancelling Follower")
-				return
-			case <-f.followerTrigger:
-				log.Println("Starting the follower")
-				f.startFollower()
-			default:
-				log.Println("Follower ticking...")
-			}
-		}
-	}()
-	return followerCompletionChan
-}
-
-func (f *follower) startFollower() {
-	ticker := time.NewTicker(rconfig.PollDuration * time.Second)
+func (f *follower) Run() {
+	log.Println("Follower")
+	aeReqChan := f.aeRPC.AppendEntryReqChan()
+	voteReqChan := f.voteRPC.RequestVoteReqChan()
+	f.raftTimer.SetDeadline(time.Now())
+	ticker := time.NewTicker(rconfig.PollDuration)
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
-		case req := <-f.transport.GetRequestChan():
-			{
-				//Process request
-				f.processRequest(req)
-				f.resetDeadline(tick)
+		case aeReq := <-aeReqChan:{
+			respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
+			resp, err := f.aeRPC.Process(rpc.AppendEntryMeta{
+				Term:         aeReq.Term,
+				LeaderId:     aeReq.LeaderId,
+				PrevLogIndex: aeReq.PrevLogIndex,
+				PrevLogTerm:  aeReq.PrevLogTerm,
+				Entries:      aeReq.Entries,
+				LeaderCommit: aeReq.LeaderCommit,
+			})
+			if err != nil {
+				errChan <- err
 			}
+			respChan <- resp
+			//reset the deadline
+			f.raftTimer.SetDeadline(tick)
+		}
+		case voteReq := <-voteReqChan:{
+			respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
+			resp, err := f.voteRPC.Process(rpc.RequestVoteMeta{
+				Term:         voteReq.Term,
+				CandidateId:  voteReq.CandidateId,
+				LastLogIndex: voteReq.LastLogIndex,
+				LastLogTerm:  voteReq.LastLogTerm,
+			})
+			if err != nil {
+				errChan <- err
+			}
+			respChan <- resp
+			//reset the deadline
+			f.raftTimer.SetDeadline(tick)
+		}
 		default:
-			{
-				if f.exceedsDeadline(tick) {
-					//transition to candidate
-					f.transitionToCandidate()
-					return
-				}
+			if tick.After(f.raftTimer.GetDeadline()) {
+				f.state.SetState(state.CandidateState)
+				return
 			}
 		}
 	}
 }
 
-func (f *follower) processRequest(request transport.Request) {
-	switch f.transport.GetRequestType(request) {
-	case transport.AppendEntry:
-		f.appendEntry(request)
-	case transport.VoteRequest:
-		f.processVote(request)
-	}
+type FollowerProvider interface {
+	Provide(raftState state.RaftState) Follower
 }
 
-func (f *follower) exceedsDeadline(tick time.Time) bool {
-	return tick.After(f.raftTimer.GetDeadline())
+type followerProvider struct{}
+
+func (followerProvider) Provide(raftState state.RaftState) Follower {
+	return &follower{state: raftState}
 }
 
-func (f *follower) resetDeadline(tick time.Time) {
-	//Resetting the deadline
-	f.raftTimer.SetDeadline(tick)
-}
 
-func (f *follower) transitionToCandidate() {
-	f.candidateTrigger <- CandidateTrigger{}
-}
-
-func (f *follower) appendEntry(request transport.Request) {
-	//Logic for appending entry
-	f.raftLog.AppendEntry(request.Payload)
-}
-
-func (f *follower) processVote(request transport.Request) {
-	//Logic for processing vote
-	f.raftVoter.ProcessVote(request.Payload)
-}

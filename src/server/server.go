@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"kitengo/raft/actors"
 	"kitengo/raft/rpc"
 )
 
@@ -55,7 +54,6 @@ type raftServer struct {
 	requestChan    chan<- Request
 	appendEntrySvc rpc.RaftAppendEntry
 	requestVoteSvc rpc.RaftRequestVote
-	raftActor      actors.RaftActor
 }
 
 //Accept responds to a request made to a raft server

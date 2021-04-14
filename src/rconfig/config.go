@@ -4,5 +4,5 @@ import (
 	"time"
 )
 
-const PollDuration = 1
+const PollDuration = 100 * time.Millisecond
 const IdleTimeout = 120 * time.Millisecond
