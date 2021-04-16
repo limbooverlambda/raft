@@ -9,12 +9,13 @@ import (
 
 //RequestType defines the kind of request received
 //by the RaftServer, it can be one of 'AppendEntry'
-// or 'RequestVote'
+// 'RequestVote' or 'ClientCommand'
 type RequestType int
 
 const (
 	AppendEntry RequestType = iota
 	RequestVote
+	ClientCommand
 )
 
 type Request struct {
@@ -38,6 +39,10 @@ type RequestVotePayload struct {
 	LastLogTerm  int64
 }
 
+type ClientCommandPayload struct {
+	ClientCommand []byte
+}
+
 type Response struct {
 	Payload []byte
 }
@@ -54,6 +59,7 @@ type raftServer struct {
 	requestChan    chan<- Request
 	appendEntrySvc rpc.RaftAppendEntry
 	requestVoteSvc rpc.RaftRequestVote
+	clientCommandSvc rpc.RaftClientCommand
 }
 
 //Accept responds to a request made to a raft server
@@ -62,6 +68,7 @@ type raftServer struct {
 //The request can be one of:
 // - AppendEntry (actual appends and heartbeats)
 // - RequestVote
+// - ClientCommand
 // Once the request type has been retrieved, The request
 // is wrapped in an appropriate struct for the action
 //  An example would be something along the lines of:
@@ -95,6 +102,10 @@ func (rs *raftServer) Accept(request Request) (respChan ResponseChan, errChan Er
 	case RequestVote:
 		{
 			respChan, errChan = rs.requestVote(request.Payload)
+		}
+	case ClientCommand:
+		{
+		   respChan, errChan = rs.clientCommand(request.Payload)
 		}
 	}
 	return
@@ -167,6 +178,45 @@ func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
 		rs.requestVoteSvc.ReceiveRequestVote(rv)
 		select {
 		case resp := <-rvRespChan:
+			{
+				var payloadBytes bytes.Buffer
+				enc := gob.NewEncoder(&payloadBytes)
+				err := enc.Encode(resp)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				respChan <- Response{Payload: payloadBytes.Bytes()}
+				close(respChan)
+				return
+			}
+		}
+	}()
+	return respChan, errChan
+}
+
+func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
+	respChan := make(chan Response)
+	errChan := make(chan error)
+	go func() {
+		defer close(respChan)
+		defer close(errChan)
+		//TODO: Not the right spot for decoding.
+		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
+		var commandPayload ClientCommandPayload
+		err := decoder.Decode(commandPayload)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		cRespChan := make(chan rpc.ClientCommandResponse)
+		c := rpc.ClientCommand{
+			RespChan:  cRespChan,
+			ErrorChan: errChan,
+		}
+		rs.clientCommandSvc.ReceiveClientCommand(c)
+		select {
+		case resp := <-cRespChan:
 			{
 				var payloadBytes bytes.Buffer
 				enc := gob.NewEncoder(&payloadBytes)

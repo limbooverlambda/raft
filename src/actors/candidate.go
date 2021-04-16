@@ -25,7 +25,8 @@ type candidate struct{
 	voteRPC rpc.RaftRequestVote
 }
 
-//On conversion to candidate, start election:
+//On conversion to candidate,
+// Start election:
 //• Increment currentTerm
 //• Vote for self
 //• Reset election timer
@@ -40,6 +41,7 @@ func (c *candidate) Run() {
 	voteReqChan := c.voteRPC.RequestVoteReqChan()
 	term := c.term.IncrementTerm()
 	reqVoteChan := c.voter.RequestVote(term)
+	//Start election timer
 	c.raftTimer.SetDeadline(time.Now())
 	ticker := time.NewTicker(rconfig.PollDuration)
 	defer ticker.Stop()

@@ -48,10 +48,30 @@ type RequestVoteMeta struct {
 	LastLogTerm  int64
 }
 
-type RequestVoteResponse struct{}
+type RequestVoteResponse struct{ Term int64 }
 
 type RaftRequestVote interface {
 	ReceiveRequestVote(requestVote RequestVote)
 	Process(meta RequestVoteMeta) (RequestVoteResponse, error)
 	RequestVoteReqChan() <-chan RequestVote
+}
+
+type ClientCommand struct {
+	Payload   []byte
+	RespChan  chan<- ClientCommandResponse
+	ErrorChan chan<- error
+}
+
+type ClientCommandMeta struct {
+	Payload []byte
+}
+
+type ClientCommandResponse struct {
+	Committed bool
+}
+
+type RaftClientCommand interface {
+	ReceiveClientCommand(clientCommand ClientCommand)
+	Process(meta ClientCommandMeta) (ClientCommandResponse, error)
+	ClientCommandReqChan() <-chan ClientCommand
 }
