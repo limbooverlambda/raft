@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"kitengo/raft/rconfig"
-	"kitengo/raft/rpc"
-	"kitengo/raft/state"
-	"kitengo/raft/term"
-	"kitengo/raft/timer"
-	"kitengo/raft/voter"
+	"github.com/kitengo/raft/internal/rconfig"
+	"github.com/kitengo/raft/internal/rpc"
+	"github.com/kitengo/raft/internal/state"
+	"github.com/kitengo/raft/internal/term"
+	"github.com/kitengo/raft/internal/timer"
+	"github.com/kitengo/raft/internal/voter"
 )
 
 type Candidate interface {
@@ -17,12 +17,12 @@ type Candidate interface {
 }
 
 type candidate struct{
-	state state.RaftState
-	term term.RaftTerm
-	voter voter.RaftVoter
+	state     state.RaftState
+	term      term.RaftTerm
+	voter     voter.RaftVoter
 	raftTimer timer.RaftTimer
-	aeRPC rpc.RaftAppendEntry
-	voteRPC rpc.RaftRequestVote
+	aeRPC     rpc.RaftAppendEntry
+	voteRPC   rpc.RaftRequestVote
 }
 
 //On conversion to candidate,

@@ -4,10 +4,10 @@ import (
 	"log"
 	"time"
 
-	"kitengo/raft/rconfig"
-	"kitengo/raft/rpc"
-	"kitengo/raft/state"
-	"kitengo/raft/timer"
+	"github.com/kitengo/raft/internal/rconfig"
+	"github.com/kitengo/raft/internal/rpc"
+	"github.com/kitengo/raft/internal/state"
+	"github.com/kitengo/raft/internal/timer"
 )
 
 type Follower interface {
@@ -15,9 +15,9 @@ type Follower interface {
 }
 
 type follower struct{
-	state state.RaftState
-	aeRPC rpc.RaftAppendEntry
-	voteRPC rpc.RaftRequestVote
+	state     state.RaftState
+	aeRPC     rpc.RaftAppendEntry
+	voteRPC   rpc.RaftRequestVote
 	raftTimer timer.RaftTimer
 }
 

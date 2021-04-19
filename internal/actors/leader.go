@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"kitengo/raft/heartbeat"
-	"kitengo/raft/rconfig"
-	"kitengo/raft/rpc"
-	"kitengo/raft/state"
-	"kitengo/raft/term"
-	"kitengo/raft/timer"
+	"github.com/kitengo/raft/internal/heartbeat"
+	"github.com/kitengo/raft/internal/rconfig"
+	"github.com/kitengo/raft/internal/rpc"
+	"github.com/kitengo/raft/internal/state"
+	"github.com/kitengo/raft/internal/term"
+	"github.com/kitengo/raft/internal/timer"
 )
 
 type Leader interface {

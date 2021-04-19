@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"kitengo/raft/rpc"
+	"github.com/kitengo/raft/internal/rpc"
 )
 
 //RequestType defines the kind of request received
@@ -56,9 +56,9 @@ type RaftServer interface {
 }
 
 type raftServer struct {
-	requestChan    chan<- Request
-	appendEntrySvc rpc.RaftAppendEntry
-	requestVoteSvc rpc.RaftRequestVote
+	requestChan      chan<- Request
+	appendEntrySvc   rpc.RaftAppendEntry
+	requestVoteSvc   rpc.RaftRequestVote
 	clientCommandSvc rpc.RaftClientCommand
 }
 

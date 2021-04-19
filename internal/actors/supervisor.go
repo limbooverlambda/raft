@@ -3,7 +3,7 @@ package actors
 import (
 	"log"
 
-	rstate "kitengo/raft/state"
+	rstate "github.com/kitengo/raft/internal/state"
 )
 
 type RaftSupervisor interface {
