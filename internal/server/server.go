@@ -4,62 +4,33 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/kitengo/raft/internal/rpc"
+	"github.com/kitengo/raft/internal/locator"
+	raftmodels "github.com/kitengo/raft/internal/models"
+	raftrpc "github.com/kitengo/raft/internal/rpc"
 )
 
-//RequestType defines the kind of request received
-//by the RaftServer, it can be one of 'AppendEntry'
-// 'RequestVote' or 'ClientCommand'
-type RequestType int
 
-const (
-	AppendEntry RequestType = iota
-	RequestVote
-	ClientCommand
-)
 
-type Request struct {
-	RequestType RequestType
-	Payload     []byte
-}
-
-type AppendEntryPayload struct {
-	Term         int64
-	LeaderId     string
-	PrevLogIndex int64
-	PrevLogTerm  int64
-	Entries      []byte
-	LeaderCommit int64
-}
-
-type RequestVotePayload struct {
-	Term         int64
-	CandidateId  string
-	LastLogIndex int64
-	LastLogTerm  int64
-}
-
-type ClientCommandPayload struct {
-	ClientCommand []byte
-}
-
-type Response struct {
-	Payload []byte
-}
-
-type ResponseChan <-chan Response
+type ResponseChan <-chan raftmodels.Response
 type ErrorChan <-chan error
 
 //The RaftServer will
 type RaftServer interface {
-	Accept(request Request) (ResponseChan, ErrorChan)
+	Accept(request raftmodels.Request) (ResponseChan, ErrorChan)
+}
+
+func NewRaftServer(locator locator.RpcLocator) RaftServer {
+	return &raftServer{
+		appendEntrySvc:   locator.GetAppendEntrySvc(),
+		requestVoteSvc:   locator.GetRequestVoteSvc(),
+		clientCommandSvc: locator.GetClientCommandSvc(),
+	}
 }
 
 type raftServer struct {
-	requestChan      chan<- Request
-	appendEntrySvc   rpc.RaftAppendEntry
-	requestVoteSvc   rpc.RaftRequestVote
-	clientCommandSvc rpc.RaftClientCommand
+	appendEntrySvc   raftrpc.RaftAppendEntry
+	requestVoteSvc   raftrpc.RaftRequestVote
+	clientCommandSvc raftrpc.RaftClientCommand
 }
 
 //Accept responds to a request made to a raft server
@@ -74,7 +45,7 @@ type raftServer struct {
 //  An example would be something along the lines of:
 //   The incoming request is AppendEntry
 //     We create the following struct for the AppendEntry request
-//     rpc.AppendEntry {
+//     raftrpc.AppendEntry {
 //          term int64
 //          leaderId string
 //          prevLogIndex int64
@@ -86,24 +57,24 @@ type raftServer struct {
 //     }
 // After the struct has been created, the appropriate Actor function will be
 // called for one of the state machines to work on this payload. In this case
-// rpc.ProcessAppendEntry(ae AppendEntry) which will enqueue the AppendEntry
+// raftrpc.ProcessAppendEntry(ae AppendEntry) which will enqueue the AppendEntry
 // to a channel maintained by the rpc package.
 // The appropriate worker (leader, follower, candidate) will pick up the
 // appendEntry and process it appropriately.
 // Once it is done processing it, it will send either the response or the
 // error back on the RespChan or the Error chan
 // The same pattern will be leveraged by RequestVote
-func (rs *raftServer) Accept(request Request) (respChan ResponseChan, errChan ErrorChan) {
+func (rs *raftServer) Accept(request raftmodels.Request) (respChan ResponseChan, errChan ErrorChan) {
 	switch request.RequestType {
-	case AppendEntry:
+	case raftmodels.AppendEntry:
 		{
 			respChan, errChan = rs.appendEntry(request.Payload)
 		}
-	case RequestVote:
+	case raftmodels.RequestVote:
 		{
 			respChan, errChan = rs.requestVote(request.Payload)
 		}
-	case ClientCommand:
+	case raftmodels.ClientCommand:
 		{
 		   respChan, errChan = rs.clientCommand(request.Payload)
 		}
@@ -112,21 +83,21 @@ func (rs *raftServer) Accept(request Request) (respChan ResponseChan, errChan Er
 }
 
 func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
-	respChan := make(chan Response)
+	respChan := make(chan raftmodels.Response)
 	errChan := make(chan error)
 	go func() {
 		defer close(respChan)
 		defer close(errChan)
 		//TODO: Not the right spot for decoding.
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
-		var aePayload AppendEntryPayload
+		var aePayload raftmodels.AppendEntryPayload
 		err := decoder.Decode(aePayload)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		aeRespChan := make(chan rpc.AppendEntryResponse)
-		ae := rpc.AppendEntry{
+		aeRespChan := make(chan raftrpc.AppendEntryResponse)
+		ae := raftrpc.AppendEntry{
 			Term:         aePayload.Term,
 			LeaderId:     aePayload.LeaderId,
 			PrevLogIndex: aePayload.PrevLogIndex,
@@ -147,7 +118,7 @@ func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
 					errChan <- err
 					return
 				}
-				respChan <- Response{Payload: payloadBytes.Bytes()}
+				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
 				close(respChan)
 				return
 			}
@@ -157,21 +128,21 @@ func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
 }
 
 func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
-	respChan := make(chan Response)
+	respChan := make(chan raftmodels.Response)
 	errChan := make(chan error)
 	go func() {
 		defer close(respChan)
 		defer close(errChan)
 		//TODO: Not the right spot for decoding.
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
-		var rvPayload RequestVotePayload
+		var rvPayload raftmodels.RequestVotePayload
 		err := decoder.Decode(rvPayload)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		rvRespChan := make(chan rpc.RequestVoteResponse)
-		rv := rpc.RequestVote{
+		rvRespChan := make(chan raftrpc.RequestVoteResponse)
+		rv := raftrpc.RequestVote{
 			RespChan:  rvRespChan,
 			ErrorChan: errChan,
 		}
@@ -186,7 +157,7 @@ func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
 					errChan <- err
 					return
 				}
-				respChan <- Response{Payload: payloadBytes.Bytes()}
+				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
 				close(respChan)
 				return
 			}
@@ -196,21 +167,22 @@ func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
 }
 
 func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
-	respChan := make(chan Response)
+	respChan := make(chan raftmodels.Response)
 	errChan := make(chan error)
 	go func() {
 		defer close(respChan)
 		defer close(errChan)
 		//TODO: Not the right spot for decoding.
-		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
-		var commandPayload ClientCommandPayload
-		err := decoder.Decode(commandPayload)
+		buffer := bytes.NewBuffer(payload)
+		decoder := gob.NewDecoder(buffer)
+		var commandPayload raftmodels.ClientCommandPayload
+		err := decoder.Decode(&commandPayload)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		cRespChan := make(chan rpc.ClientCommandResponse)
-		c := rpc.ClientCommand{
+		cRespChan := make(chan raftrpc.ClientCommandResponse)
+		c := raftrpc.ClientCommand{
 			RespChan:  cRespChan,
 			ErrorChan: errChan,
 		}
@@ -225,7 +197,7 @@ func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
 					errChan <- err
 					return
 				}
-				respChan <- Response{Payload: payloadBytes.Bytes()}
+				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
 				close(respChan)
 				return
 			}

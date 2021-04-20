@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/kitengo/raft/internal/rconfig"
-	"github.com/kitengo/raft/internal/rpc"
-	"github.com/kitengo/raft/internal/state"
-	"github.com/kitengo/raft/internal/term"
-	"github.com/kitengo/raft/internal/timer"
-	"github.com/kitengo/raft/internal/voter"
+	raftconfig "github.com/kitengo/raft/internal/rconfig"
+	raftrpc "github.com/kitengo/raft/internal/rpc"
+	raftstate "github.com/kitengo/raft/internal/state"
+	raftterm "github.com/kitengo/raft/internal/term"
+	rafttimer "github.com/kitengo/raft/internal/timer"
+	raftvoter "github.com/kitengo/raft/internal/voter"
 )
 
 type Candidate interface {
@@ -17,12 +17,12 @@ type Candidate interface {
 }
 
 type candidate struct{
-	state     state.RaftState
-	term      term.RaftTerm
-	voter     voter.RaftVoter
-	raftTimer timer.RaftTimer
-	aeRPC     rpc.RaftAppendEntry
-	voteRPC   rpc.RaftRequestVote
+	state     raftstate.RaftState
+	term      raftterm.RaftTerm
+	voter     raftvoter.RaftVoter
+	raftTimer rafttimer.RaftTimer
+	aeRPC     raftrpc.RaftAppendEntry
+	voteRPC   raftrpc.RaftRequestVote
 }
 
 //On conversion to candidate,
@@ -43,20 +43,20 @@ func (c *candidate) Run() {
 	reqVoteChan := c.voter.RequestVote(term)
 	//Start election timer
 	c.raftTimer.SetDeadline(time.Now())
-	ticker := time.NewTicker(rconfig.PollDuration)
+	ticker := time.NewTicker(raftconfig.PollDuration)
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
 		case vs := <- reqVoteChan:
 			{
-				if vs == voter.Leader {
-					c.state.SetState(state.LeaderState)
+				if vs == raftvoter.Leader {
+					c.state.SetState(raftstate.LeaderState)
 					return
 				}
 			}
 		case aeReq := <-aeReqChan:{
 			respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
-			resp, err := c.aeRPC.Process(rpc.AppendEntryMeta{
+			resp, err := c.aeRPC.Process(raftrpc.AppendEntryMeta{
 				Term:         aeReq.Term,
 				LeaderId:     aeReq.LeaderId,
 				PrevLogIndex: aeReq.PrevLogIndex,
@@ -70,13 +70,13 @@ func (c *candidate) Run() {
 			respChan <- resp
 			//reset the deadline
 			if resp.Term > term {
-				c.state.SetState(state.FollowerState)
+				c.state.SetState(raftstate.FollowerState)
 				return
 			}
 		}
 		case voteReq := <-voteReqChan:{
 			respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
-			resp, err := c.voteRPC.Process(rpc.RequestVoteMeta{
+			resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
 				Term:         voteReq.Term,
 				CandidateId:  voteReq.CandidateId,
 				LastLogIndex: voteReq.LastLogIndex,
@@ -98,11 +98,11 @@ func (c *candidate) Run() {
 }
 
 type CandidateProvider interface {
-	Provide(raftState state.RaftState) Candidate
+	Provide(raftState raftstate.RaftState) Candidate
 }
 
 type candidateProvider struct{}
 
-func (candidateProvider) Provide(raftState state.RaftState) Candidate {
+func (candidateProvider) Provide(raftState raftstate.RaftState) Candidate {
 	return &candidate{state: raftState}
 }

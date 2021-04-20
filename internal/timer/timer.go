@@ -10,3 +10,27 @@ type RaftTimer interface {
 	SetIdleTimeout()
 	GetIdleTimeout() time.Time
 }
+
+func NewRaftTimer() RaftTimer  {
+	return raftTimer{}
+}
+
+type raftTimer struct{}
+
+func (raftTimer) SetDeadline(currentTime time.Time) {
+	panic("implement me")
+}
+
+func (raftTimer) GetDeadline() time.Time {
+	panic("implement me")
+}
+
+func (raftTimer) SetIdleTimeout() {
+	panic("implement me")
+}
+
+func (raftTimer) GetIdleTimeout() time.Time {
+	panic("implement me")
+}
+
+

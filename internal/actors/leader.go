@@ -4,12 +4,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/kitengo/raft/internal/heartbeat"
-	"github.com/kitengo/raft/internal/rconfig"
-	"github.com/kitengo/raft/internal/rpc"
-	"github.com/kitengo/raft/internal/state"
-	"github.com/kitengo/raft/internal/term"
-	"github.com/kitengo/raft/internal/timer"
+	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
+	raftconfig "github.com/kitengo/raft/internal/rconfig"
+	raftrpc "github.com/kitengo/raft/internal/rpc"
+	raftstate "github.com/kitengo/raft/internal/state"
+	raftterm "github.com/kitengo/raft/internal/term"
+	rafttimer "github.com/kitengo/raft/internal/timer"
 )
 
 type Leader interface {
@@ -17,13 +17,13 @@ type Leader interface {
 }
 
 type leader struct {
-	state     state.RaftState
-	heartbeat heartbeat.RaftHeartbeat
-	clientRPC rpc.RaftClientCommand
-	aeRPC     rpc.RaftAppendEntry
-	voteRPC   rpc.RaftRequestVote
-	raftTerm  term.RaftTerm
-	raftTimer timer.RaftTimer
+	state     raftstate.RaftState
+	heartbeat raftheartbeat.RaftHeartbeat
+	clientRPC raftrpc.RaftClientCommand
+	aeRPC     raftrpc.RaftAppendEntry
+	voteRPC   raftrpc.RaftRequestVote
+	raftTerm  raftterm.RaftTerm
+	raftTimer rafttimer.RaftTimer
 }
 
 func (l *leader) Run() {
@@ -31,21 +31,21 @@ func (l *leader) Run() {
 	clientReqChan := l.clientRPC.ClientCommandReqChan()
 	aeReqChan := l.aeRPC.AppendEntryReqChan()
 	voteReqChan := l.voteRPC.RequestVoteReqChan()
-	//Upon election: send initial empty AppendEntries RPCs (heartbeat)
+	//Upon election: send initial empty AppendEntries RPCs (raftheartbeat)
 	l.heartbeat.SendHeartbeats()
 	//Reset the idle time
 	l.raftTimer.SetIdleTimeout()
 	//Start the ticker
-	ticker := time.NewTicker(rconfig.PollDuration)
+	ticker := time.NewTicker(raftconfig.PollDuration)
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
 		// If command received from client: append entry to local log,
-		// respond after entry applied to state machine (§5.3)
+		// respond after entry applied to raftstate machine (§5.3)
 		case clientReq := <-clientReqChan:
 			{
 				respChan, errChan := clientReq.RespChan, clientReq.ErrorChan
-				resp, err := l.clientRPC.Process(rpc.ClientCommandMeta{
+				resp, err := l.clientRPC.Process(raftrpc.ClientCommandMeta{
 					Payload: clientReq.Payload,
 				})
 				l.raftTimer.SetIdleTimeout()
@@ -60,7 +60,7 @@ func (l *leader) Run() {
 			{
 				currentTerm := l.raftTerm.GetTerm()
 				respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
-				resp, err := l.aeRPC.Process(rpc.AppendEntryMeta{
+				resp, err := l.aeRPC.Process(raftrpc.AppendEntryMeta{
 					Term:         aeReq.Term,
 					LeaderId:     aeReq.LeaderId,
 					PrevLogIndex: aeReq.PrevLogIndex,
@@ -73,7 +73,7 @@ func (l *leader) Run() {
 				}
 				respChan <- resp
 				if resp.Term > currentTerm {
-					l.state.SetState(state.FollowerState)
+					l.state.SetState(raftstate.FollowerState)
 					return
 				}
 			}
@@ -81,7 +81,7 @@ func (l *leader) Run() {
 			{
 				currentTerm := l.raftTerm.GetTerm()
 				respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
-				resp, err := l.voteRPC.Process(rpc.RequestVoteMeta{
+				resp, err := l.voteRPC.Process(raftrpc.RequestVoteMeta{
 					Term:         voteReq.Term,
 					CandidateId:  voteReq.CandidateId,
 					LastLogIndex: voteReq.LastLogIndex,
@@ -92,7 +92,7 @@ func (l *leader) Run() {
 				}
 				respChan <- resp
 				if resp.Term > currentTerm {
-					l.state.SetState(state.FollowerState)
+					l.state.SetState(raftstate.FollowerState)
 					return
 				}
 			}
@@ -105,11 +105,11 @@ func (l *leader) Run() {
 }
 
 type LeaderProvider interface {
-	Provide(raftState state.RaftState) Leader
+	Provide(raftState raftstate.RaftState) Leader
 }
 
 type leaderProvider struct{}
 
-func (leaderProvider) Provide(raftState state.RaftState) Leader {
+func (leaderProvider) Provide(raftState raftstate.RaftState) Leader {
 	return &leader{state: raftState}
 }

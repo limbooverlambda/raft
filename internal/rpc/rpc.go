@@ -1,5 +1,9 @@
 package rpc
 
+import (
+	"log"
+)
+
 type AppendEntryRequest struct{}
 type AppendEntryResponse struct {
 	Term    int64
@@ -32,6 +36,24 @@ type RaftAppendEntry interface {
 	AppendEntryReqChan() <-chan AppendEntry
 }
 
+func NewRaftAppendEntry() RaftAppendEntry {
+	return raftAppendEntry{}
+}
+
+type raftAppendEntry struct{}
+
+func (raftAppendEntry) ReceiveAppendEntry(appendEntry AppendEntry) {
+	panic("implement me")
+}
+
+func (raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, error) {
+	panic("implement me")
+}
+
+func (raftAppendEntry) AppendEntryReqChan() <-chan AppendEntry {
+	panic("implement me")
+}
+
 type RequestVote struct {
 	Term         int64
 	CandidateId  string
@@ -56,6 +78,24 @@ type RaftRequestVote interface {
 	RequestVoteReqChan() <-chan RequestVote
 }
 
+func NewRaftRequestVote() RaftRequestVote {
+	return raftRequestVote{}
+}
+
+type raftRequestVote struct{}
+
+func (raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
+	panic("implement me")
+}
+
+func (raftRequestVote) Process(meta RequestVoteMeta) (RequestVoteResponse, error) {
+	panic("implement me")
+}
+
+func (raftRequestVote) RequestVoteReqChan() <-chan RequestVote {
+	panic("implement me")
+}
+
 type ClientCommand struct {
 	Payload   []byte
 	RespChan  chan<- ClientCommandResponse
@@ -74,4 +114,22 @@ type RaftClientCommand interface {
 	ReceiveClientCommand(clientCommand ClientCommand)
 	Process(meta ClientCommandMeta) (ClientCommandResponse, error)
 	ClientCommandReqChan() <-chan ClientCommand
+}
+
+func NewRaftClientCommand() RaftClientCommand {
+	return raftClientCommand{}
+}
+
+type raftClientCommand struct{}
+
+func (raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
+	log.Printf("Received clientCommand %v\n", clientCommand)
+}
+
+func (raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
+	panic("implement me")
+}
+
+func (raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
+	panic("implement me")
 }

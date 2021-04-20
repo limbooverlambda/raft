@@ -4,10 +4,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/kitengo/raft/internal/rconfig"
-	"github.com/kitengo/raft/internal/rpc"
-	"github.com/kitengo/raft/internal/state"
-	"github.com/kitengo/raft/internal/timer"
+	raftconfig "github.com/kitengo/raft/internal/rconfig"
+	raftrpc "github.com/kitengo/raft/internal/rpc"
+	raftstate "github.com/kitengo/raft/internal/state"
+	rafttimer "github.com/kitengo/raft/internal/timer"
 )
 
 type Follower interface {
@@ -15,10 +15,10 @@ type Follower interface {
 }
 
 type follower struct{
-	state     state.RaftState
-	aeRPC     rpc.RaftAppendEntry
-	voteRPC   rpc.RaftRequestVote
-	raftTimer timer.RaftTimer
+	state     raftstate.RaftState
+	aeRPC     raftrpc.RaftAppendEntry
+	voteRPC   raftrpc.RaftRequestVote
+	raftTimer rafttimer.RaftTimer
 }
 
 func (f *follower) Run() {
@@ -26,13 +26,13 @@ func (f *follower) Run() {
 	aeReqChan := f.aeRPC.AppendEntryReqChan()
 	voteReqChan := f.voteRPC.RequestVoteReqChan()
 	f.raftTimer.SetDeadline(time.Now())
-	ticker := time.NewTicker(rconfig.PollDuration)
+	ticker := time.NewTicker(raftconfig.PollDuration)
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
 		case aeReq := <-aeReqChan:{
 			respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
-			resp, err := f.aeRPC.Process(rpc.AppendEntryMeta{
+			resp, err := f.aeRPC.Process(raftrpc.AppendEntryMeta{
 				Term:         aeReq.Term,
 				LeaderId:     aeReq.LeaderId,
 				PrevLogIndex: aeReq.PrevLogIndex,
@@ -49,7 +49,7 @@ func (f *follower) Run() {
 		}
 		case voteReq := <-voteReqChan:{
 			respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
-			resp, err := f.voteRPC.Process(rpc.RequestVoteMeta{
+			resp, err := f.voteRPC.Process(raftrpc.RequestVoteMeta{
 				Term:         voteReq.Term,
 				CandidateId:  voteReq.CandidateId,
 				LastLogIndex: voteReq.LastLogIndex,
@@ -64,7 +64,7 @@ func (f *follower) Run() {
 		}
 		default:
 			if tick.After(f.raftTimer.GetDeadline()) {
-				f.state.SetState(state.CandidateState)
+				f.state.SetState(raftstate.CandidateState)
 				return
 			}
 		}
@@ -72,12 +72,12 @@ func (f *follower) Run() {
 }
 
 type FollowerProvider interface {
-	Provide(raftState state.RaftState) Follower
+	Provide(raftState raftstate.RaftState) Follower
 }
 
 type followerProvider struct{}
 
-func (followerProvider) Provide(raftState state.RaftState) Follower {
+func (followerProvider) Provide(raftState raftstate.RaftState) Follower {
 	return &follower{state: raftState}
 }
 

@@ -8,6 +8,9 @@ GOTEST=$(GO) test -v ./...
 RAFTSERVER=cmd/raftserver
 RAFTSERVER_PATH=$(BUILDPATH)/$(RAFTSERVER)/
 
+RAFTCLIENT=cmd/raftclient
+RAFTCLIENT_PATH=$(BUILDPATH)/$(RAFTCLIENT)/
+
 
 server:
 	cd $(RAFTSERVER_PATH);$(GOBUILD)
@@ -15,8 +18,15 @@ server:
 server-clean:
 	cd $(RAFTSERVER_PATH);$(GOCLEAN)
 
-all: server
+client:
+	cd $(RAFTCLIENT_PATH);$(GOBUILD)
 
-clean-all: server-clean
+client-clean:
+	cd $(RAFTCLIENT_PATH);$(GOCLEAN)
+
+
+all: server client
+
+clean-all: server-clean client-clean
 
 
