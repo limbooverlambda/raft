@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/kitengo/raft/internal/locator"
 	raftconfig "github.com/kitengo/raft/internal/rconfig"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
@@ -98,11 +99,21 @@ func (c *candidate) Run() {
 }
 
 type CandidateProvider interface {
-	Provide(raftState raftstate.RaftState) Candidate
+	Provide() Candidate
 }
 
-type candidateProvider struct{}
+type candidateProvider struct{
+	locator.ServiceLocator
+}
 
-func (candidateProvider) Provide(raftState raftstate.RaftState) Candidate {
-	return &candidate{state: raftState}
+func (cp *candidateProvider) Provide() Candidate {
+	rpcLocator := cp.GetRpcLocator()
+	return &candidate{
+		state:     cp.GetRaftState(),
+		term:      cp.GetRaftTerm(),
+		voter:     cp.GetRaftVoter(),
+		raftTimer: cp.GetRaftTimer(),
+		aeRPC:     rpcLocator.GetAppendEntrySvc(),
+		voteRPC:   rpcLocator.GetRequestVoteSvc(),
+	}
 }

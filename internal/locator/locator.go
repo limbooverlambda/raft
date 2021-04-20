@@ -1,6 +1,7 @@
 package locator
 
 import (
+	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftterm "github.com/kitengo/raft/internal/term"
@@ -14,6 +15,7 @@ type ServiceLocator interface {
 	GetRaftTerm() raftterm.RaftTerm
 	GetRaftTimer() rafttimer.RaftTimer
 	GetRaftVoter() raftvoter.RaftVoter
+	GetRaftHeartbeat() raftheartbeat.RaftHeartbeat
 }
 
 func NewServiceLocator() ServiceLocator {
@@ -21,6 +23,7 @@ func NewServiceLocator() ServiceLocator {
 		raftState: raftstate.NewRaftState(),
 		raftTerm: raftterm.NewRaftTerm(),
 		raftVoter: raftvoter.NewRaftVoter(),
+		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(),
 	}
 }
 
@@ -28,6 +31,7 @@ type serviceLocator struct{
 	raftState raftstate.RaftState
 	raftTerm raftterm.RaftTerm
 	raftVoter raftvoter.RaftVoter
+	raftHeartbeat raftheartbeat.RaftHeartbeat
 }
 
 func (sl *serviceLocator) GetRaftVoter() raftvoter.RaftVoter {
@@ -48,6 +52,10 @@ func (sl *serviceLocator) GetRaftState() raftstate.RaftState {
 
 func (*serviceLocator) GetRpcLocator() RpcLocator {
 	return rpcLocator{}
+}
+
+func (sl *serviceLocator) GetRaftHeartbeat() raftheartbeat.RaftHeartbeat {
+	return sl.raftHeartbeat
 }
 
 type RpcLocator interface {

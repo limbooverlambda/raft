@@ -5,6 +5,7 @@ import (
 	"time"
 
 	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
+	svclocator "github.com/kitengo/raft/internal/locator"
 	raftconfig "github.com/kitengo/raft/internal/rconfig"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
@@ -105,11 +106,23 @@ func (l *leader) Run() {
 }
 
 type LeaderProvider interface {
-	Provide(raftState raftstate.RaftState) Leader
+	Provide() Leader
 }
 
-type leaderProvider struct{}
-
-func (leaderProvider) Provide(raftState raftstate.RaftState) Leader {
-	return &leader{state: raftState}
+type leaderProvider struct{
+	svclocator.ServiceLocator
 }
+
+func (lp *leaderProvider) Provide() Leader {
+	return &leader{
+		state:     lp.GetRaftState(),
+		heartbeat: lp.GetRaftHeartbeat(),
+		clientRPC: lp.GetRpcLocator().GetClientCommandSvc(),
+		aeRPC:     lp.GetRpcLocator().GetAppendEntrySvc(),
+		voteRPC:   lp.GetRpcLocator().GetRequestVoteSvc(),
+		raftTerm:  lp.GetRaftTerm(),
+		raftTimer: lp.GetRaftTimer(),
+	}
+}
+
+

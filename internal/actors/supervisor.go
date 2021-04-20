@@ -3,6 +3,7 @@ package actors
 import (
 	"log"
 
+	svclocator "github.com/kitengo/raft/internal/locator"
 	rstate "github.com/kitengo/raft/internal/state"
 )
 
@@ -11,12 +12,16 @@ type RaftSupervisor interface {
 	Start()
 }
 
-func NewRaftSupervisor() RaftSupervisor {
+func NewRaftSupervisor(locator svclocator.ServiceLocator) RaftSupervisor {
 	return &raftSupervisor{
-		raftState:         rstate.NewRaftState(),
-		followerProvider:  followerProvider{},
-		leaderProvider:    leaderProvider{},
-		candidateProvider: candidateProvider{},
+		raftState:         locator.GetRaftState(),
+		followerProvider:  &followerProvider{
+			locator,
+		},
+		leaderProvider:    &leaderProvider{
+			locator,
+		},
+		candidateProvider: &candidateProvider{locator},
 	}
 }
 
@@ -52,16 +57,16 @@ func (rs *raftSupervisor) shutdown() {
 }
 
 func (rs *raftSupervisor) runLeader() {
-	leader := rs.leaderProvider.Provide(rs.raftState)
+	leader := rs.leaderProvider.Provide()
 	leader.Run()
 }
 
 func (rs *raftSupervisor) runCandidate() {
-	candidate := rs.candidateProvider.Provide(rs.raftState)
+	candidate := rs.candidateProvider.Provide()
 	candidate.Run()
 }
 
 func (rs *raftSupervisor) runFollower() {
-	follower := rs.followerProvider.Provide(rs.raftState)
+	follower := rs.followerProvider.Provide()
 	follower.Run()
 }

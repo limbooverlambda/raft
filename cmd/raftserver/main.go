@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/kitengo/raft/internal/actors"
 	"github.com/kitengo/raft/internal/locator"
 	"github.com/kitengo/raft/internal/models"
 	"github.com/kitengo/raft/internal/server"
@@ -21,6 +22,11 @@ func main() {
 	fmt.Println("Starting raft...")
 	//Initializing the service locator
 	svcLocator := locator.NewServiceLocator()
+
+	//Initializing the RaftSupervisor
+	raftSupervisor := actors.NewRaftSupervisor(svcLocator)
+	go func() {raftSupervisor.Start()}()
+
 	//Initializing the raft server
 	raftServer := server.NewRaftServer(svcLocator.GetRpcLocator())
 	l, err := net.Listen("tcp", "127.0.0.1:4546")
