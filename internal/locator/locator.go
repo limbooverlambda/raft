@@ -24,6 +24,7 @@ func NewServiceLocator() ServiceLocator {
 		raftTerm: raftterm.NewRaftTerm(),
 		raftVoter: raftvoter.NewRaftVoter(),
 		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(),
+		rpcLocator: NewRpcLocator(),
 	}
 }
 
@@ -32,6 +33,7 @@ type serviceLocator struct{
 	raftTerm raftterm.RaftTerm
 	raftVoter raftvoter.RaftVoter
 	raftHeartbeat raftheartbeat.RaftHeartbeat
+	rpcLocator RpcLocator
 }
 
 func (sl *serviceLocator) GetRaftVoter() raftvoter.RaftVoter {
@@ -50,8 +52,8 @@ func (sl *serviceLocator) GetRaftState() raftstate.RaftState {
 	return sl.raftState
 }
 
-func (*serviceLocator) GetRpcLocator() RpcLocator {
-	return rpcLocator{}
+func (sl *serviceLocator) GetRpcLocator() RpcLocator {
+	return sl.rpcLocator
 }
 
 func (sl *serviceLocator) GetRaftHeartbeat() raftheartbeat.RaftHeartbeat {
@@ -64,16 +66,29 @@ type RpcLocator interface {
 	GetClientCommandSvc() raftrpc.RaftClientCommand
 }
 
-type rpcLocator struct{}
-
-func (rpcLocator) GetAppendEntrySvc() raftrpc.RaftAppendEntry {
-	return raftrpc.NewRaftAppendEntry()
+func NewRpcLocator() RpcLocator {
+	return &rpcLocator{
+		raftAppend:        raftrpc.NewRaftAppendEntry(),
+		raftRequestVote:   raftrpc.NewRaftRequestVote(),
+		raftClientCommand: raftrpc.NewRaftClientCommand(),
+	}
 }
 
-func (rpcLocator) GetRequestVoteSvc() raftrpc.RaftRequestVote {
-	return raftrpc.NewRaftRequestVote()
+type rpcLocator struct{
+	raftAppend raftrpc.RaftAppendEntry
+	raftRequestVote raftrpc.RaftRequestVote
+	raftClientCommand raftrpc.RaftClientCommand
+
 }
 
-func (rpcLocator) GetClientCommandSvc() raftrpc.RaftClientCommand {
-	return raftrpc.NewRaftClientCommand()
+func (rpcl *rpcLocator) GetAppendEntrySvc() raftrpc.RaftAppendEntry {
+	return rpcl.raftAppend
+}
+
+func (rpcl *rpcLocator) GetRequestVoteSvc() raftrpc.RaftRequestVote {
+	return rpcl.raftRequestVote
+}
+
+func (rpcl *rpcLocator) GetClientCommandSvc() raftrpc.RaftClientCommand {
+	return rpcl.raftClientCommand
 }

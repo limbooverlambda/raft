@@ -99,7 +99,10 @@ func (l *leader) Run() {
 			}
 		default:
 			if tick.After(l.raftTimer.GetIdleTimeout()) {
+				//Idle expired, send the heartbeat
 				l.heartbeat.SendHeartbeats()
+				//Reset the timeout
+				l.raftTimer.SetIdleTimeout()
 			}
 		}
 	}

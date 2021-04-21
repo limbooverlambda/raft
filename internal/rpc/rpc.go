@@ -128,7 +128,7 @@ type RaftClientCommand interface {
 
 func NewRaftClientCommand() RaftClientCommand {
 	clientCommandChan := make(chan ClientCommand, 1)
-	return raftClientCommand{
+	return &raftClientCommand{
 		clientCommandChan: clientCommandChan,
 	}
 }
@@ -137,15 +137,15 @@ type raftClientCommand struct{
 	clientCommandChan chan ClientCommand
 }
 
-func (rcc raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
+func (rcc *raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
 	log.Printf("Received clientCommand %v\n", clientCommand)
 	rcc.clientCommandChan <- clientCommand
 }
 
-func (raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
+func (*raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
 	panic("implement me")
 }
 
-func (rcc raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
+func (rcc *raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
 	return rcc.clientCommandChan
 }
