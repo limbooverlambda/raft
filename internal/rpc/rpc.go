@@ -143,7 +143,8 @@ func (rcc *raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) 
 }
 
 func (*raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
-	panic("implement me")
+	log.Printf("Processing client request %v\n", meta)
+	return ClientCommandResponse{Committed: true}, nil
 }
 
 func (rcc *raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {

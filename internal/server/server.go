@@ -198,7 +198,6 @@ func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
 					return
 				}
 				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
-				close(respChan)
 				return
 			}
 		}

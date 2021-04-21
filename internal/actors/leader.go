@@ -52,10 +52,8 @@ func (l *leader) Run() {
 				l.raftTimer.SetIdleTimeout()
 				if err != nil {
 					errChan <- err
-					return
 				}
 				respChan <- resp
-				return
 			}
 		case aeReq := <-aeReqChan:
 			{
@@ -117,12 +115,13 @@ type leaderProvider struct{
 }
 
 func (lp *leaderProvider) Provide() Leader {
+	rpcLocator := lp.GetRpcLocator()
 	return &leader{
 		state:     lp.GetRaftState(),
 		heartbeat: lp.GetRaftHeartbeat(),
-		clientRPC: lp.GetRpcLocator().GetClientCommandSvc(),
-		aeRPC:     lp.GetRpcLocator().GetAppendEntrySvc(),
-		voteRPC:   lp.GetRpcLocator().GetRequestVoteSvc(),
+		clientRPC: rpcLocator.GetClientCommandSvc(),
+		aeRPC:     rpcLocator.GetAppendEntrySvc(),
+		voteRPC:   rpcLocator.GetRequestVoteSvc(),
 		raftTerm:  lp.GetRaftTerm(),
 		raftTimer: lp.GetRaftTimer(),
 	}
