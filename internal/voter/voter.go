@@ -8,7 +8,6 @@ const (
 )
 
 type RaftVoter interface {
-	ProcessVote(vote []byte) error
 	RequestVote(term int64) <-chan VoteStatus
 }
 
@@ -18,10 +17,11 @@ func NewRaftVoter() RaftVoter {
 
 type raftVoter struct{}
 
-func (raftVoter) ProcessVote(vote []byte) error {
-	panic("implement me")
-}
-
 func (raftVoter) RequestVote(term int64) <-chan VoteStatus {
-	panic("implement me")
+	voteStatusChan := make(chan VoteStatus, 1)
+	go func() {
+		defer close(voteStatusChan)
+		voteStatusChan <- Leader
+	}()
+	return voteStatusChan
 }

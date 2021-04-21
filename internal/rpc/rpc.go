@@ -37,21 +37,26 @@ type RaftAppendEntry interface {
 }
 
 func NewRaftAppendEntry() RaftAppendEntry {
-	return raftAppendEntry{}
+	appendEntryChan := make(chan AppendEntry, 1)
+	return raftAppendEntry{
+		appendEntryChan: appendEntryChan,
+	}
 }
 
-type raftAppendEntry struct{}
+type raftAppendEntry struct{
+	appendEntryChan chan AppendEntry
+}
 
-func (raftAppendEntry) ReceiveAppendEntry(appendEntry AppendEntry) {
+func (ra raftAppendEntry) ReceiveAppendEntry(appendEntry AppendEntry) {
+	ra.appendEntryChan <- appendEntry
+}
+
+func (ra raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, error) {
 	panic("implement me")
 }
 
-func (raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, error) {
-	panic("implement me")
-}
-
-func (raftAppendEntry) AppendEntryReqChan() <-chan AppendEntry {
-	panic("implement me")
+func (ra raftAppendEntry) AppendEntryReqChan() <-chan AppendEntry {
+	return ra.appendEntryChan
 }
 
 type RequestVote struct {
@@ -79,21 +84,26 @@ type RaftRequestVote interface {
 }
 
 func NewRaftRequestVote() RaftRequestVote {
-	return raftRequestVote{}
+	requestVoteChan := make(chan RequestVote, 1)
+	return raftRequestVote{
+		requestVoteChan: requestVoteChan,
+	}
 }
 
-type raftRequestVote struct{}
+type raftRequestVote struct{
+	requestVoteChan chan RequestVote
+}
 
-func (raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
-	panic("implement me")
+func (rrV raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
+	rrV.requestVoteChan <- requestVote
 }
 
 func (raftRequestVote) Process(meta RequestVoteMeta) (RequestVoteResponse, error) {
 	panic("implement me")
 }
 
-func (raftRequestVote) RequestVoteReqChan() <-chan RequestVote {
-	panic("implement me")
+func (rrV raftRequestVote) RequestVoteReqChan() <-chan RequestVote {
+	return rrV.requestVoteChan
 }
 
 type ClientCommand struct {
@@ -117,19 +127,25 @@ type RaftClientCommand interface {
 }
 
 func NewRaftClientCommand() RaftClientCommand {
-	return raftClientCommand{}
+	clientCommandChan := make(chan ClientCommand, 1)
+	return raftClientCommand{
+		clientCommandChan: clientCommandChan,
+	}
 }
 
-type raftClientCommand struct{}
+type raftClientCommand struct{
+	clientCommandChan chan ClientCommand
+}
 
-func (raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
+func (rcc raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
 	log.Printf("Received clientCommand %v\n", clientCommand)
+	rcc.clientCommandChan <- clientCommand
 }
 
 func (raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
 	panic("implement me")
 }
 
-func (raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
-	panic("implement me")
+func (rcc raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
+	return rcc.clientCommandChan
 }

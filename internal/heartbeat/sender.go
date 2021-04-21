@@ -1,5 +1,9 @@
 package heartbeat
 
+import (
+	"log"
+)
+
 type RaftHeartbeat interface {
 	SendHeartbeats()
 }
@@ -11,5 +15,5 @@ func NewRaftHeartbeat() RaftHeartbeat {
 type raftHeartbeat struct{}
 
 func (raftHeartbeat) SendHeartbeats() {
-	panic("implement me")
+	log.Println("Sending heartbeat from leader...")
 }

@@ -1,7 +1,10 @@
 package timer
 
 import (
+	"math/rand"
 	"time"
+
+	"github.com/kitengo/raft/internal/rconfig"
 )
 
 type RaftTimer interface {
@@ -12,25 +15,33 @@ type RaftTimer interface {
 }
 
 func NewRaftTimer() RaftTimer  {
-	return raftTimer{}
+	deadlineTick := time.Now()
+	return &raftTimer{
+		deadlineTick: deadlineTick,
+	}
 }
 
-type raftTimer struct{}
-
-func (raftTimer) SetDeadline(currentTime time.Time) {
-	panic("implement me")
+type raftTimer struct{
+	deadlineTick time.Time
+	idleTick time.Time
 }
 
-func (raftTimer) GetDeadline() time.Time {
-	panic("implement me")
+func (rt *raftTimer) SetDeadline(currentTime time.Time) {
+	rand.Seed(time.Now().UnixNano())
+	rDelta := rand.Intn(rconfig.MaxPacketDelayMs - rconfig.MinPacketDelayMs) + rconfig.MinPacketDelayMs
+	rt.deadlineTick = currentTime.Add(time.Duration(rDelta) * time.Millisecond)
 }
 
-func (raftTimer) SetIdleTimeout() {
-	panic("implement me")
+func (rt *raftTimer) GetDeadline() time.Time {
+	return rt.deadlineTick
 }
 
-func (raftTimer) GetIdleTimeout() time.Time {
-	panic("implement me")
+func (rt *raftTimer) SetIdleTimeout() {
+	rt.deadlineTick = time.Now().Add(rconfig.IdleTimeout)
+}
+
+func (rt *raftTimer) GetIdleTimeout() time.Time {
+	return rt.deadlineTick
 }
 
 
