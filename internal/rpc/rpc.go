@@ -52,7 +52,11 @@ func (ra raftAppendEntry) ReceiveAppendEntry(appendEntry AppendEntry) {
 }
 
 func (ra raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, error) {
-	panic("implement me")
+	log.Printf("Processing AppendEntry %v\n", meta)
+	return AppendEntryResponse{
+		Term:    1,
+		Success: false,
+	}, nil
 }
 
 func (ra raftAppendEntry) AppendEntryReqChan() <-chan AppendEntry {
