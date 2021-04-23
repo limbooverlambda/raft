@@ -36,15 +36,7 @@ type AppendEntryPayload struct {
 }
 
 func (aep *AppendEntryPayload) ToRequest() (Request, error) {
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	if err := encoder.Encode(aep);err != nil {
-		return Request{}, err
-	}
-	return Request{
-		RequestType: AppendEntry,
-		Payload:    buffer.Bytes(),
-	}, nil
+	return toRequestPayload(AppendEntry, aep)
 }
 
 type RequestVotePayload struct {
@@ -54,22 +46,30 @@ type RequestVotePayload struct {
 	LastLogTerm  int64
 }
 
+func (rvp *RequestVotePayload) ToRequest() (Request, error) {
+	return toRequestPayload(RequestVote, rvp)
+}
+
 type ClientCommandPayload struct {
 	ClientCommand []byte
 }
 
 func (ccp *ClientCommandPayload) ToRequest() (Request, error) {
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	if err := encoder.Encode(ccp);err != nil {
-		return Request{}, err
-	}
-	return Request{
-		RequestType: ClientCommand,
-		Payload:    buffer.Bytes(),
-	}, nil
+	return toRequestPayload(ClientCommand, ccp)
 }
 
 type Response struct {
 	Payload []byte
+}
+
+func toRequestPayload(requestType RequestType, payload interface{}) (Request, error) {
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	if err := encoder.Encode(payload);err != nil {
+		return Request{}, err
+	}
+	return Request{
+		RequestType: requestType,
+		Payload:    buffer.Bytes(),
+	}, nil
 }

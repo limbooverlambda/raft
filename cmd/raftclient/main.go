@@ -55,6 +55,25 @@ var appendEntryCmd = &cobra.Command{
 	},
 }
 
+var requestVoteCmd = &cobra.Command{
+	Use: "votecmd",
+	Short: "Send request Vote to the raft server",
+	Run: func(cmd *cobra.Command, args []string) {
+		ip, _ := cmd.Flags().GetString("ip")
+		candidateID, _ := cmd.Flags().GetString("candidateid")
+		lastLogIndex, _ := cmd.Flags().GetInt64("lastlogindex")
+		lastLogTerm, _ := cmd.Flags().GetInt64("lastlogterm")
+		term, _ := cmd.Flags().GetInt64("term")
+		fmt.Println("Sending vote command")
+		command := &raftmodels.RequestVotePayload{
+			Term:         term,
+			CandidateId:  candidateID,
+			LastLogIndex: lastLogIndex,
+			LastLogTerm:  lastLogTerm,
+		}
+		sendCommand(command, ip)
+	},
+}
 
 
 func main() {
@@ -69,8 +88,15 @@ func main() {
 	appendEntryCmd.Flags().Int64P("leadercommit","", 0,"leader commit for the append entry")
 	appendEntryCmd.Flags().Int64P("term","", 0,"term for the append entry")
 
+	requestVoteCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
+	requestVoteCmd.Flags().StringP("candidateid","", "","candidate id for the request vote")
+	requestVoteCmd.Flags().Int64P("lastlogindex","", 0,"last log index for the request vote")
+	requestVoteCmd.Flags().Int64P("lastlogterm","", 0,"last log term for the request vote")
+	requestVoteCmd.Flags().Int64P("term","", 0,"term for the request vote")
+
 	rootCmd.AddCommand(clientCmd)
 	rootCmd.AddCommand(appendEntryCmd)
+	rootCmd.AddCommand(requestVoteCmd)
 
 	rootCmd.Execute()
 }
