@@ -23,19 +23,59 @@ var clientCmd = &cobra.Command{
 		ip, _ := cmd.Flags().GetString("ip")
 		payload, _ := cmd.Flags().GetString("payload")
 		fmt.Printf("Sending client command %v to %v\n", payload, ip)
-		clientCommand(ip, payload)
+		//Send the client request payload
+		clientCommand := &raftmodels.ClientCommandPayload{
+			ClientCommand: []byte(payload),
+		}
+		sendCommand(clientCommand,ip)
 	},
 }
+
+var appendEntryCmd = &cobra.Command{
+	Use: "aecmd",
+	Short: "Send append entry requests to the raft server",
+	Run: func(cmd *cobra.Command, args []string) {
+		ip, _ := cmd.Flags().GetString("ip")
+		entries, _ := cmd.Flags().GetString("entries")
+		leaderID, _ := cmd.Flags().GetString("leaderid")
+		prevLogIndex, _ := cmd.Flags().GetInt64("prevlogindex")
+		prevLogTerm, _ := cmd.Flags().GetInt64("prevlogterm")
+		leaderCommit, _ := cmd.Flags().GetInt64("leadercommit")
+		term, _ := cmd.Flags().GetInt64("term")
+		fmt.Println("Sending ae command")
+		aeCommand := &raftmodels.AppendEntryPayload{
+			Term:         term,
+			LeaderId:     leaderID,
+			PrevLogIndex: prevLogIndex,
+			PrevLogTerm:  prevLogTerm,
+			Entries:      []byte(entries),
+			LeaderCommit: leaderCommit,
+		}
+		sendCommand(aeCommand, ip)
+	},
+}
+
 
 
 func main() {
 	clientCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
 	clientCmd.Flags().StringP("payload","", "","string payload to send to the raft server")
+
+	appendEntryCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
+	appendEntryCmd.Flags().StringP("entries","", "","string payload to append to the raft server")
+	appendEntryCmd.Flags().StringP("leaderid","", "","leader id for the append entry")
+	appendEntryCmd.Flags().Int64P("prevlogindex","", 0,"prev log index for the append entry")
+	appendEntryCmd.Flags().Int64P("prevlogterm","", 0,"prev log term for the append entry")
+	appendEntryCmd.Flags().Int64P("leadercommit","", 0,"leader commit for the append entry")
+	appendEntryCmd.Flags().Int64P("term","", 0,"term for the append entry")
+
 	rootCmd.AddCommand(clientCmd)
+	rootCmd.AddCommand(appendEntryCmd)
+
 	rootCmd.Execute()
 }
 
-func clientCommand(ipAddress ,payload string) {
+func sendCommand(requestConv raftmodels.RequestConverter, ipAddress string) {
 	//TODO: Send the client request, appendEntry and voteRequest to the server
 	//TODO: On the server side ensure that the payload is decoded
 	//TODO: Wire up the RaftServer with the TCP server
@@ -45,11 +85,7 @@ func clientCommand(ipAddress ,payload string) {
 		log.Panic("Unable to dial due to", err)
 	}
 	defer conn.Close()
-	//Send the client request payload
-	clientCommand := raftmodels.ClientCommandPayload{
-		ClientCommand: []byte(payload),
-	}
-	req, err := clientCommand.ToRequest()
+	req, err := requestConv.ToRequest()
 	if err != nil {
 		log.Panic("Unable to serialize client comand request", err)
 	}
@@ -73,3 +109,5 @@ func clientCommand(ipAddress ,payload string) {
 	<-recvChan
 	log.Println("Sent the client command request")
 }
+
+

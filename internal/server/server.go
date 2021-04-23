@@ -91,7 +91,7 @@ func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
 		//TODO: Not the right spot for decoding.
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
 		var aePayload raftmodels.AppendEntryPayload
-		err := decoder.Decode(aePayload)
+		err := decoder.Decode(&aePayload)
 		if err != nil {
 			errChan <- err
 			return
@@ -119,7 +119,6 @@ func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
 					return
 				}
 				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
-				close(respChan)
 				return
 			}
 		}

@@ -22,6 +22,10 @@ type Request struct {
 	Payload     []byte
 }
 
+type RequestConverter interface {
+	ToRequest() (Request, error)
+}
+
 type AppendEntryPayload struct {
 	Term         int64
 	LeaderId     string
@@ -29,6 +33,18 @@ type AppendEntryPayload struct {
 	PrevLogTerm  int64
 	Entries      []byte
 	LeaderCommit int64
+}
+
+func (aep *AppendEntryPayload) ToRequest() (Request, error) {
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	if err := encoder.Encode(aep);err != nil {
+		return Request{}, err
+	}
+	return Request{
+		RequestType: AppendEntry,
+		Payload:    buffer.Bytes(),
+	}, nil
 }
 
 type RequestVotePayload struct {
