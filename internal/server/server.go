@@ -9,8 +9,6 @@ import (
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 )
 
-
-
 type ResponseChan <-chan raftmodels.Response
 type ErrorChan <-chan error
 
@@ -76,7 +74,7 @@ func (rs *raftServer) Accept(request raftmodels.Request) (respChan ResponseChan,
 		}
 	case raftmodels.ClientCommand:
 		{
-		   respChan, errChan = rs.clientCommand(request.Payload)
+			respChan, errChan = rs.clientCommand(request.Payload)
 		}
 	}
 	return
@@ -135,7 +133,7 @@ func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
 		//TODO: Not the right spot for decoding.
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
 		var rvPayload raftmodels.RequestVotePayload
-		err := decoder.Decode(rvPayload)
+		err := decoder.Decode(&rvPayload)
 		if err != nil {
 			errChan <- err
 			return
@@ -157,7 +155,6 @@ func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
 					return
 				}
 				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
-				close(respChan)
 				return
 			}
 		}

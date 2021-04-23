@@ -103,7 +103,8 @@ func (rrV raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
 }
 
 func (raftRequestVote) Process(meta RequestVoteMeta) (RequestVoteResponse, error) {
-	panic("implement me")
+	log.Println("Received request vote", meta)
+	return RequestVoteResponse{Term: 1}, nil
 }
 
 func (rrV raftRequestVote) RequestVoteReqChan() <-chan RequestVote {
