@@ -17,15 +17,15 @@ type Follower interface {
 
 type follower struct {
 	state     raftstate.RaftState
-	aeRPC     raftrpc.RaftAppendEntry
-	voteRPC   raftrpc.RaftRequestVote
+	aeRPC     raftrpc.RaftRpc
+	voteRPC   raftrpc.RaftRpc
 	raftTimer rafttimer.RaftTimer
 }
 
 func (f *follower) Run() {
 	log.Println("Follower")
-	aeReqChan := f.aeRPC.AppendEntryReqChan()
-	voteReqChan := f.voteRPC.RequestVoteReqChan()
+	aeReqChan := f.aeRPC.RaftRpcReqChan()
+	voteReqChan := f.voteRPC.RaftRpcReqChan()
 	f.raftTimer.SetDeadline(time.Now())
 	ticker := time.NewTicker(raftconfig.PollDuration)
 	defer ticker.Stop()
@@ -33,14 +33,15 @@ func (f *follower) Run() {
 		select {
 		case aeReq := <-aeReqChan:
 			{
-				respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
+				respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
+				aer := aeReq.(raftrpc.AppendEntry)
 				resp, err := f.aeRPC.Process(raftrpc.AppendEntryMeta{
-					Term:         aeReq.Term,
-					LeaderId:     aeReq.LeaderId,
-					PrevLogIndex: aeReq.PrevLogIndex,
-					PrevLogTerm:  aeReq.PrevLogTerm,
-					Entries:      aeReq.Entries,
-					LeaderCommit: aeReq.LeaderCommit,
+					Term:         aer.Term,
+					LeaderId:     aer.LeaderId,
+					PrevLogIndex: aer.PrevLogIndex,
+					PrevLogTerm:  aer.PrevLogTerm,
+					Entries:      aer.Entries,
+					LeaderCommit: aer.LeaderCommit,
 				})
 				if err != nil {
 					errChan <- err
@@ -51,12 +52,13 @@ func (f *follower) Run() {
 			}
 		case voteReq := <-voteReqChan:
 			{
-				respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
+				respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
+				vr := voteReq.(raftrpc.RequestVote)
 				resp, err := f.voteRPC.Process(raftrpc.RequestVoteMeta{
-					Term:         voteReq.Term,
-					CandidateId:  voteReq.CandidateId,
-					LastLogIndex: voteReq.LastLogIndex,
-					LastLogTerm:  voteReq.LastLogTerm,
+					Term:         vr.Term,
+					CandidateId:  vr.CandidateId,
+					LastLogIndex: vr.LastLogIndex,
+					LastLogTerm:  vr.LastLogTerm,
 				})
 				if err != nil {
 					errChan <- err
