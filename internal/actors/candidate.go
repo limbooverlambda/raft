@@ -22,11 +22,11 @@ type candidate struct{
 	term      raftterm.RaftTerm
 	voter     raftvoter.RaftVoter
 	raftTimer rafttimer.RaftTimer
-	aeRPC     raftrpc.RaftAppendEntry
-	voteRPC   raftrpc.RaftRequestVote
+	aeRPC     raftrpc.RaftRpc
+	voteRPC   raftrpc.RaftRpc
 }
 
-//On conversion to candidate,
+// Run On conversion to candidate,
 // Start election:
 //• Increment currentTerm
 //• Vote for self
@@ -38,8 +38,8 @@ type candidate struct{
 //• If election timeout elapses: start new election
 func (c *candidate) Run() {
 	log.Println("Candidate")
-	aeReqChan := c.aeRPC.AppendEntryReqChan()
-	voteReqChan := c.voteRPC.RequestVoteReqChan()
+	aeReqChan := c.aeRPC.RaftRpcReqChan()
+	voteReqChan := c.voteRPC.RaftRpcReqChan()
 	term := c.term.IncrementTerm()
 	reqVoteChan := c.voter.RequestVote(term)
 	//Start election timer
@@ -56,32 +56,35 @@ func (c *candidate) Run() {
 				}
 			}
 		case aeReq := <-aeReqChan:{
-			respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
+			respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
+			aer := aeReq.(raftrpc.AppendEntry)
 			resp, err := c.aeRPC.Process(raftrpc.AppendEntryMeta{
-				Term:         aeReq.Term,
-				LeaderId:     aeReq.LeaderId,
-				PrevLogIndex: aeReq.PrevLogIndex,
-				PrevLogTerm:  aeReq.PrevLogTerm,
-				Entries:      aeReq.Entries,
-				LeaderCommit: aeReq.LeaderCommit,
+				Term:         aer.Term,
+				LeaderId:     aer.LeaderId,
+				PrevLogIndex: aer.PrevLogIndex,
+				PrevLogTerm:  aer.PrevLogTerm,
+				Entries:      aer.Entries,
+				LeaderCommit: aer.LeaderCommit,
 			})
 			if err != nil {
 				errChan <- err
 			}
 			respChan <- resp
 			//reset the deadline
-			if resp.Term > term {
+			aeResp := resp.(raftrpc.AppendEntryResponse)
+			if aeResp.Term > term {
 				c.state.SetState(raftstate.FollowerState)
 				return
 			}
 		}
 		case voteReq := <-voteReqChan:{
-			respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
+			respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
+			vr := voteReq.(raftrpc.RequestVote)
 			resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
-				Term:         voteReq.Term,
-				CandidateId:  voteReq.CandidateId,
-				LastLogIndex: voteReq.LastLogIndex,
-				LastLogTerm:  voteReq.LastLogTerm,
+				Term:         vr.Term,
+				CandidateId:  vr.CandidateId,
+				LastLogIndex: vr.LastLogIndex,
+				LastLogTerm:  vr.LastLogTerm,
 			})
 			if err != nil {
 				errChan <- err

@@ -4,7 +4,19 @@ import (
 	"log"
 )
 
-type AppendEntryRequest struct{}
+type RaftRpc interface {
+	Receive(request RaftRpcRequest)
+	Process(meta RaftRpcMeta) (RaftRpcResponse, error)
+	RaftRpcReqChan() <-chan RaftRpcRequest
+}
+
+type RaftRpcRequest interface {
+	GetResponseChan() chan<- RaftRpcResponse
+	GetErrorChan() chan<- error
+}
+type RaftRpcMeta interface{}
+type RaftRpcResponse interface{}
+
 type AppendEntryResponse struct {
 	Term    int64
 	Success bool
@@ -17,8 +29,16 @@ type AppendEntry struct {
 	PrevLogTerm  int64
 	Entries      []byte
 	LeaderCommit int64
-	RespChan     chan<- AppendEntryResponse
+	RespChan     chan<- RaftRpcResponse
 	ErrorChan    chan<- error
+}
+
+func (a AppendEntry) GetResponseChan() chan<- RaftRpcResponse {
+	return a.RespChan
+}
+
+func (a AppendEntry) GetErrorChan() chan<- error {
+	return a.ErrorChan
 }
 
 type AppendEntryMeta struct {
@@ -30,28 +50,29 @@ type AppendEntryMeta struct {
 	LeaderCommit int64
 }
 
-type RaftAppendEntry interface {
-	ReceiveAppendEntry(appendEntry AppendEntry)
-	Process(meta AppendEntryMeta) (AppendEntryResponse, error)
-	AppendEntryReqChan() <-chan AppendEntry
-}
+//type RaftAppendEntry interface {
+//	ReceiveAppendEntry(appendEntry AppendEntry)
+//	Process(meta AppendEntryMeta) (AppendEntryResponse, error)
+//	AppendEntryReqChan() <-chan AppendEntry
+//}
 
-func NewRaftAppendEntry() RaftAppendEntry {
-	appendEntryChan := make(chan AppendEntry, 1)
+func NewRaftAppendEntry() RaftRpc {
+	appendEntryChan := make(chan RaftRpcRequest, 1)
 	return raftAppendEntry{
 		appendEntryChan: appendEntryChan,
 	}
 }
 
-type raftAppendEntry struct{
-	appendEntryChan chan AppendEntry
+type raftAppendEntry struct {
+	appendEntryChan chan RaftRpcRequest
 }
 
-func (ra raftAppendEntry) ReceiveAppendEntry(appendEntry AppendEntry) {
+func (ra raftAppendEntry) Receive(request RaftRpcRequest) {
+	appendEntry := request.(AppendEntry)
 	ra.appendEntryChan <- appendEntry
 }
 
-func (ra raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, error) {
+func (ra raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	log.Printf("Processing AppendEntry %v\n", meta)
 	return AppendEntryResponse{
 		Term:    1,
@@ -59,7 +80,7 @@ func (ra raftAppendEntry) Process(meta AppendEntryMeta) (AppendEntryResponse, er
 	}, nil
 }
 
-func (ra raftAppendEntry) AppendEntryReqChan() <-chan AppendEntry {
+func (ra raftAppendEntry) RaftRpcReqChan() <-chan RaftRpcRequest {
 	return ra.appendEntryChan
 }
 
@@ -68,8 +89,16 @@ type RequestVote struct {
 	CandidateId  string
 	LastLogIndex int64
 	LastLogTerm  int64
-	RespChan     chan<- RequestVoteResponse
+	RespChan     chan<- RaftRpcResponse
 	ErrorChan    chan<- error
+}
+
+func (a RequestVote) GetResponseChan() chan<- RaftRpcResponse {
+	return a.RespChan
+}
+
+func (a RequestVote) GetErrorChan() chan<- error {
+	return a.ErrorChan
 }
 
 type RequestVoteMeta struct {
@@ -81,40 +110,53 @@ type RequestVoteMeta struct {
 
 type RequestVoteResponse struct{ Term int64 }
 
-type RaftRequestVote interface {
-	ReceiveRequestVote(requestVote RequestVote)
-	Process(meta RequestVoteMeta) (RequestVoteResponse, error)
-	RequestVoteReqChan() <-chan RequestVote
-}
+//type RaftRequestVote interface {
+//	ReceiveRequestVote(requestVote RequestVote)
+//	Process(meta RequestVoteMeta) (RequestVoteResponse, error)
+//	RequestVoteReqChan() <-chan RequestVote
+//}
 
-func NewRaftRequestVote() RaftRequestVote {
-	requestVoteChan := make(chan RequestVote, 1)
+func NewRaftRequestVote() RaftRpc {
+	requestVoteChan := make(chan RaftRpcRequest, 1)
 	return raftRequestVote{
 		requestVoteChan: requestVoteChan,
 	}
 }
 
-type raftRequestVote struct{
-	requestVoteChan chan RequestVote
+type raftRequestVote struct {
+	requestVoteChan chan RaftRpcRequest
+}
+
+func (rrV raftRequestVote) Receive(request RaftRpcRequest) {
+	requestVote := request.(RequestVote)
+	rrV.requestVoteChan <- requestVote
+}
+
+func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
+	log.Println("Received request vote", meta)
+	return RequestVoteResponse{Term: 1}, nil
+}
+
+func (rrV raftRequestVote) RaftRpcReqChan() <-chan RaftRpcRequest {
+	return rrV.requestVoteChan
 }
 
 func (rrV raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
 	rrV.requestVoteChan <- requestVote
 }
 
-func (raftRequestVote) Process(meta RequestVoteMeta) (RequestVoteResponse, error) {
-	log.Println("Received request vote", meta)
-	return RequestVoteResponse{Term: 1}, nil
-}
-
-func (rrV raftRequestVote) RequestVoteReqChan() <-chan RequestVote {
-	return rrV.requestVoteChan
-}
-
 type ClientCommand struct {
 	Payload   []byte
-	RespChan  chan<- ClientCommandResponse
+	RespChan  chan<- RaftRpcResponse
 	ErrorChan chan<- error
+}
+
+func (a ClientCommand) GetResponseChan() chan<- RaftRpcResponse {
+	return a.RespChan
+}
+
+func (a ClientCommand) GetErrorChan() chan<- error {
+	return a.ErrorChan
 }
 
 type ClientCommandMeta struct {
@@ -125,33 +167,28 @@ type ClientCommandResponse struct {
 	Committed bool
 }
 
-type RaftClientCommand interface {
-	ReceiveClientCommand(clientCommand ClientCommand)
-	Process(meta ClientCommandMeta) (ClientCommandResponse, error)
-	ClientCommandReqChan() <-chan ClientCommand
-}
-
-func NewRaftClientCommand() RaftClientCommand {
-	clientCommandChan := make(chan ClientCommand, 1)
+func NewRaftClientCommand() RaftRpc {
+	clientCommandChan := make(chan RaftRpcRequest, 1)
 	return &raftClientCommand{
 		clientCommandChan: clientCommandChan,
 	}
 }
 
-type raftClientCommand struct{
-	clientCommandChan chan ClientCommand
+type raftClientCommand struct {
+	clientCommandChan chan RaftRpcRequest
 }
 
-func (rcc *raftClientCommand) ReceiveClientCommand(clientCommand ClientCommand) {
-	log.Printf("Received clientCommand %v\n", clientCommand)
+func (rcc *raftClientCommand) Receive(request RaftRpcRequest) {
+	log.Printf("Received clientCommand %v\n", request)
+	clientCommand := request.(ClientCommand)
 	rcc.clientCommandChan <- clientCommand
 }
 
-func (*raftClientCommand) Process(meta ClientCommandMeta) (ClientCommandResponse, error) {
+func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	log.Printf("Processing client request %v\n", meta)
 	return ClientCommandResponse{Committed: true}, nil
 }
 
-func (rcc *raftClientCommand) ClientCommandReqChan() <-chan ClientCommand {
+func (rcc *raftClientCommand) RaftRpcReqChan() <-chan RaftRpcRequest {
 	return rcc.clientCommandChan
 }

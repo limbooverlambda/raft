@@ -26,9 +26,9 @@ func NewRaftServer(locator locator.RpcLocator) RaftServer {
 }
 
 type raftServer struct {
-	appendEntrySvc   raftrpc.RaftAppendEntry
-	requestVoteSvc   raftrpc.RaftRequestVote
-	clientCommandSvc raftrpc.RaftClientCommand
+	appendEntrySvc   raftrpc.RaftRpc
+	requestVoteSvc   raftrpc.RaftRpc
+	clientCommandSvc raftrpc.RaftRpc
 }
 
 //Accept responds to a request made to a raft server
@@ -81,21 +81,19 @@ func (rs *raftServer) Accept(request raftmodels.Request) (respChan ResponseChan,
 }
 
 func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
-	respChan := make(chan raftmodels.Response)
-	errChan := make(chan error)
-	go func() {
-		defer close(respChan)
-		defer close(errChan)
-		//TODO: Not the right spot for decoding.
+	extractPayloadFunc := func(payload []byte) (interface{}, error) {
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
 		var aePayload raftmodels.AppendEntryPayload
 		err := decoder.Decode(&aePayload)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		aeRespChan := make(chan raftrpc.AppendEntryResponse)
-		ae := raftrpc.AppendEntry{
+		return aePayload, err
+	}
+	toRaftRpcRequest := func(
+		payload interface{},
+		aeRespChan chan raftrpc.RaftRpcResponse,
+		errChan chan error,
+	) raftrpc.RaftRpcRequest {
+		aePayload := payload.(raftmodels.AppendEntryPayload)
+		return raftrpc.AppendEntry{
 			Term:         aePayload.Term,
 			LeaderId:     aePayload.LeaderId,
 			PrevLogIndex: aePayload.PrevLogIndex,
@@ -105,86 +103,113 @@ func (rs *raftServer) appendEntry(payload []byte) (ResponseChan, ErrorChan) {
 			RespChan:     aeRespChan,
 			ErrorChan:    errChan,
 		}
-		rs.appendEntrySvc.ReceiveAppendEntry(ae)
-		select {
-		case resp := <-aeRespChan:
-			{
-				var payloadBytes bytes.Buffer
-				enc := gob.NewEncoder(&payloadBytes)
-				err := enc.Encode(resp)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
-				return
-			}
-		}
-	}()
-	return respChan, errChan
+	}
+	receiveFn := func(ae raftrpc.RaftRpcRequest) {
+		rs.appendEntrySvc.Receive(ae)
+	}
+
+	return rs.processRequest(payload, extractPayloadFunc, toRaftRpcRequest, receiveFn)
 }
 
 func (rs *raftServer) requestVote(payload []byte) (ResponseChan, ErrorChan) {
-	respChan := make(chan raftmodels.Response)
-	errChan := make(chan error)
-	go func() {
-		defer close(respChan)
-		defer close(errChan)
-		//TODO: Not the right spot for decoding.
+	extractPayloadFn := func(payload []byte) (interface{}, error) {
 		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
 		var rvPayload raftmodels.RequestVotePayload
 		err := decoder.Decode(&rvPayload)
-		if err != nil {
-			errChan <- err
-			return
+		return rvPayload, err
+	}
+
+	toRaftRpcRequestFn := func(
+		payload interface{},
+		respChan chan raftrpc.RaftRpcResponse,
+		errChan chan error,
+	) raftrpc.RaftRpcRequest {
+		rvPayload := payload.(raftmodels.RequestVotePayload)
+		return raftrpc.RequestVote{
+			Term:         rvPayload.Term,
+			CandidateId:  rvPayload.CandidateId,
+			LastLogIndex: rvPayload.LastLogIndex,
+			LastLogTerm:  rvPayload.LastLogTerm,
+			RespChan:     respChan,
+			ErrorChan:    errChan,
 		}
-		rvRespChan := make(chan raftrpc.RequestVoteResponse)
-		rv := raftrpc.RequestVote{
-			RespChan:  rvRespChan,
-			ErrorChan: errChan,
-		}
-		rs.requestVoteSvc.ReceiveRequestVote(rv)
-		select {
-		case resp := <-rvRespChan:
-			{
-				var payloadBytes bytes.Buffer
-				enc := gob.NewEncoder(&payloadBytes)
-				err := enc.Encode(resp)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				respChan <- raftmodels.Response{Payload: payloadBytes.Bytes()}
-				return
-			}
-		}
-	}()
-	return respChan, errChan
+	}
+
+	receiveFn := func(req raftrpc.RaftRpcRequest) {
+		rs.requestVoteSvc.Receive(req)
+	}
+
+	return rs.processRequest(
+		payload,
+		extractPayloadFn,
+		toRaftRpcRequestFn,
+		receiveFn,
+	)
 }
 
 func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
+	extractPayloadFn := func(payload []byte) (interface{}, error) {
+		decoder := gob.NewDecoder(bytes.NewBuffer(payload))
+		var clPayload raftmodels.ClientCommandPayload
+		err := decoder.Decode(&clPayload)
+		return clPayload, err
+	}
+
+	toRaftRpcRequestFn := func(
+		payload interface{},
+		respChan chan raftrpc.RaftRpcResponse,
+		errChan chan error,
+	) raftrpc.RaftRpcRequest {
+		clPayload := payload.(raftmodels.ClientCommandPayload)
+		return raftrpc.ClientCommand{
+			Payload:   clPayload.ClientCommand,
+			RespChan:  respChan,
+			ErrorChan: errChan,
+		}
+	}
+
+	receiveFn := func(req raftrpc.RaftRpcRequest) {
+		rs.clientCommandSvc.Receive(req)
+	}
+
+	return rs.processRequest(
+		payload,
+		extractPayloadFn,
+		toRaftRpcRequestFn,
+		receiveFn,
+	)
+}
+
+type extractPayloadFn func(payload []byte) (interface{}, error)
+
+type toRaftRpcRequestFn func(
+	payload interface{},
+	aeRespChan chan raftrpc.RaftRpcResponse,
+	errChan chan error,
+) raftrpc.RaftRpcRequest
+
+type receiveFn func(raftrpc.RaftRpcRequest)
+
+func (rs *raftServer) processRequest(payload []byte,
+	extractPayloadFunc extractPayloadFn,
+	toRaftRpcRequest toRaftRpcRequestFn,
+	receiveFn receiveFn) (ResponseChan, ErrorChan) {
 	respChan := make(chan raftmodels.Response)
 	errChan := make(chan error)
+
 	go func() {
 		defer close(respChan)
 		defer close(errChan)
-		//TODO: Not the right spot for decoding.
-		buffer := bytes.NewBuffer(payload)
-		decoder := gob.NewDecoder(buffer)
-		var commandPayload raftmodels.ClientCommandPayload
-		err := decoder.Decode(&commandPayload)
+		payload, err := extractPayloadFunc(payload)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		cRespChan := make(chan raftrpc.ClientCommandResponse)
-		c := raftrpc.ClientCommand{
-			RespChan:  cRespChan,
-			ErrorChan: errChan,
-		}
-		rs.clientCommandSvc.ReceiveClientCommand(c)
+		rRespChan := make(chan raftrpc.RaftRpcResponse)
+		req := toRaftRpcRequest(payload, rRespChan, errChan)
+		receiveFn(req)
 		select {
-		case resp := <-cRespChan:
+		case resp := <-rRespChan:
 			{
 				var payloadBytes bytes.Buffer
 				enc := gob.NewEncoder(&payloadBytes)

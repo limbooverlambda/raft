@@ -20,18 +20,18 @@ type Leader interface {
 type leader struct {
 	state     raftstate.RaftState
 	heartbeat raftheartbeat.RaftHeartbeat
-	clientRPC raftrpc.RaftClientCommand
-	aeRPC     raftrpc.RaftAppendEntry
-	voteRPC   raftrpc.RaftRequestVote
+	clientRPC raftrpc.RaftRpc
+	aeRPC     raftrpc.RaftRpc
+	voteRPC   raftrpc.RaftRpc
 	raftTerm  raftterm.RaftTerm
 	raftTimer rafttimer.RaftTimer
 }
 
 func (l *leader) Run() {
 	log.Println("Leader")
-	clientReqChan := l.clientRPC.ClientCommandReqChan()
-	aeReqChan := l.aeRPC.AppendEntryReqChan()
-	voteReqChan := l.voteRPC.RequestVoteReqChan()
+	clientReqChan := l.clientRPC.RaftRpcReqChan()
+	aeReqChan := l.aeRPC.RaftRpcReqChan()
+	voteReqChan := l.voteRPC.RaftRpcReqChan()
 	//Upon election: send initial empty AppendEntries RPCs (raftheartbeat)
 	l.heartbeat.SendHeartbeats()
 	//Reset the idle time
@@ -45,9 +45,10 @@ func (l *leader) Run() {
 		// respond after entry applied to raftstate machine (§5.3)
 		case clientReq := <-clientReqChan:
 			{
-				respChan, errChan := clientReq.RespChan, clientReq.ErrorChan
+				respChan, errChan := clientReq.GetResponseChan(), clientReq.GetErrorChan()
+				clReq := clientReq.(raftrpc.ClientCommand)
 				resp, err := l.clientRPC.Process(raftrpc.ClientCommandMeta{
-					Payload: clientReq.Payload,
+					Payload: clReq.Payload,
 				})
 				l.raftTimer.SetIdleTimeout()
 				if err != nil {
@@ -58,20 +59,22 @@ func (l *leader) Run() {
 		case aeReq := <-aeReqChan:
 			{
 				currentTerm := l.raftTerm.GetTerm()
-				respChan, errChan := aeReq.RespChan, aeReq.ErrorChan
+				respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
+				aer := aeReq.(raftrpc.AppendEntry)
 				resp, err := l.aeRPC.Process(raftrpc.AppendEntryMeta{
-					Term:         aeReq.Term,
-					LeaderId:     aeReq.LeaderId,
-					PrevLogIndex: aeReq.PrevLogIndex,
-					PrevLogTerm:  aeReq.PrevLogTerm,
-					Entries:      aeReq.Entries,
-					LeaderCommit: aeReq.LeaderCommit,
+					Term:         aer.Term,
+					LeaderId:     aer.LeaderId,
+					PrevLogIndex: aer.PrevLogIndex,
+					PrevLogTerm:  aer.PrevLogTerm,
+					Entries:      aer.Entries,
+					LeaderCommit: aer.LeaderCommit,
 				})
 				if err != nil {
 					errChan <- err
 				}
 				respChan <- resp
-				if resp.Term > currentTerm {
+				aeResp := resp.(raftrpc.AppendEntryResponse)
+				if aeResp.Term > currentTerm {
 					l.state.SetState(raftstate.FollowerState)
 					return
 				}
@@ -79,18 +82,20 @@ func (l *leader) Run() {
 		case voteReq := <-voteReqChan:
 			{
 				currentTerm := l.raftTerm.GetTerm()
-				respChan, errChan := voteReq.RespChan, voteReq.ErrorChan
+				respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
+				vr := voteReq.(raftrpc.RequestVote)
 				resp, err := l.voteRPC.Process(raftrpc.RequestVoteMeta{
-					Term:         voteReq.Term,
-					CandidateId:  voteReq.CandidateId,
-					LastLogIndex: voteReq.LastLogIndex,
-					LastLogTerm:  voteReq.LastLogTerm,
+					Term:         vr.Term,
+					CandidateId:  vr.CandidateId,
+					LastLogIndex: vr.LastLogIndex,
+					LastLogTerm:  vr.LastLogTerm,
 				})
 				if err != nil {
 					errChan <- err
 				}
 				respChan <- resp
-				if resp.Term > currentTerm {
+				vResp := resp.(raftrpc.RequestVoteResponse)
+				if vResp.Term > currentTerm {
 					l.state.SetState(raftstate.FollowerState)
 					return
 				}
