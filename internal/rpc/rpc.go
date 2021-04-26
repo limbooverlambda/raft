@@ -50,12 +50,6 @@ type AppendEntryMeta struct {
 	LeaderCommit int64
 }
 
-//type RaftAppendEntry interface {
-//	ReceiveAppendEntry(appendEntry AppendEntry)
-//	Process(meta AppendEntryMeta) (AppendEntryResponse, error)
-//	AppendEntryReqChan() <-chan AppendEntry
-//}
-
 func NewRaftAppendEntry() RaftRpc {
 	appendEntryChan := make(chan RaftRpcRequest, 1)
 	return raftAppendEntry{
@@ -109,12 +103,6 @@ type RequestVoteMeta struct {
 }
 
 type RequestVoteResponse struct{ Term int64 }
-
-//type RaftRequestVote interface {
-//	ReceiveRequestVote(requestVote RequestVote)
-//	Process(meta RequestVoteMeta) (RequestVoteResponse, error)
-//	RequestVoteReqChan() <-chan RequestVote
-//}
 
 func NewRaftRequestVote() RaftRpc {
 	requestVoteChan := make(chan RaftRpcRequest, 1)
