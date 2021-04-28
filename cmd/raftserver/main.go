@@ -12,7 +12,6 @@ import (
 	"github.com/kitengo/raft/internal/server"
 )
 
-//TODO: Run the service and exercise all the RPC calls.
 //TODO: Add the peer logic
 //TODO: Create the sender stubs that will be used by both the raftclient as well as the server
 //TODO: Move the models that will be used by server and client to pkg.

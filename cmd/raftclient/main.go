@@ -102,9 +102,6 @@ func main() {
 }
 
 func sendCommand(requestConv raftmodels.RequestConverter, ipAddress string) {
-	//TODO: Send the client request, appendEntry and voteRequest to the server
-	//TODO: On the server side ensure that the payload is decoded
-	//TODO: Wire up the RaftServer with the TCP server
 	//TODO: Have the mocks return happy path payloads for the local setup
 	conn, err := net.Dial("tcp", ipAddress)
 	if err != nil {

@@ -1,7 +1,14 @@
 package rpc
 
 import (
+	"errors"
+	"github.com/kitengo/raft/internal/appendentry"
+	"github.com/kitengo/raft/internal/applicator"
+	raftlog "github.com/kitengo/raft/internal/log"
+	"github.com/kitengo/raft/internal/member"
+	raftstate "github.com/kitengo/raft/internal/state"
 	"log"
+	"time"
 )
 
 type RaftRpc interface {
@@ -164,6 +171,11 @@ func NewRaftClientCommand() RaftRpc {
 
 type raftClientCommand struct {
 	clientCommandChan chan RaftRpcRequest
+	raftLog           raftlog.RaftLog
+	raftMember        member.RaftMember
+	appendEntrySender appendentry.Sender
+	raftIndex         *raftstate.RaftIndex
+	raftApplicator    applicator.RaftApplicator
 }
 
 func (rcc *raftClientCommand) Receive(request RaftRpcRequest) {
@@ -172,9 +184,75 @@ func (rcc *raftClientCommand) Receive(request RaftRpcRequest) {
 	rcc.clientCommandChan <- clientCommand
 }
 
+//Process The leader
+//appends the command to its log as a new entry, then issues AppendEntries RPCs in
+//parallel to each of the other servers to replicate the entry. When the entry has been
+//safely replicated to the majority of the servers, the leader applies
+//the entry to its state machine and returns the result of that
+//execution to the client. If followers crash or run slowly,
+//or if network packets are lost, the leader retries AppendEntries RPCs indefinitely
 func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	log.Printf("Processing client request %v\n", meta)
+	//Append the entry to the log
+	clientCommandMeta := meta.(ClientCommandMeta)
+	offset, err := rcc.raftLog.AppendEntry(clientCommandMeta.Payload)
+	if err != nil {
+		log.Printf("unable to append entry to log due to %v\n", err)
+		return nil, err
+	}
+
+	members, err := rcc.raftMember.List()
+	if err != nil {
+		log.Printf("unable to list members of the cluster %v\n", err)
+		return nil, err
+	}
+	//Send the appendEntry requests to all the peers
+	respChan := make(chan appendentry.Response)
+	for _, member := range members {
+		rcc.appendEntrySender.ForwardEntry(appendentry.Entry{
+			MemberID: member.ID,
+			RespChan: respChan,
+		})
+	}
+	if err = rcc.waitForMajorityAcks(len(members), 100*time.Millisecond, respChan); err != nil {
+		return ClientCommandResponse{Committed: false}, nil
+	}
+	//If majority votes are received, set the commit index
+	rcc.raftIndex.SetCommitOffset(offset)
+	//Apply the command
+	if err = rcc.raftApplicator.Apply(clientCommandMeta.Payload); err == nil {
+		//Upon successful application, set the applyIndex
+		rcc.raftIndex.SetApplyOffset(offset)
+	}
+	//send the ClientCommandResponse with Committed set to true
 	return ClientCommandResponse{Committed: true}, nil
+}
+
+func (rcc *raftClientCommand) waitForMajorityAcks(memberCount int,
+	deadlineTime time.Duration,
+	respChan chan appendentry.Response) (err error) {
+	deadlineChan := time.After(deadlineTime)
+	var voteCount int
+	majorityCount := memberCount/2 + 1
+	for {
+		select {
+		case t := <-deadlineChan:
+			{
+				log.Println("deadline exceeded", t)
+				err = errors.New("deadline exceeded")
+				return
+			}
+		case resp := <-respChan:
+			{
+				if resp.Success {
+					voteCount++
+				}
+				if voteCount >= majorityCount {
+					return
+				}
+			}
+		}
+	}
 }
 
 func (rcc *raftClientCommand) RaftRpcReqChan() <-chan RaftRpcRequest {

@@ -1,7 +1,7 @@
 package log
 
 type RaftLog interface {
-	AppendEntry(entry []byte)
+	AppendEntry(entry []byte) (int64, error)
 }
 
 func NewRaftLog() RaftLog {
@@ -10,6 +10,6 @@ func NewRaftLog() RaftLog {
 
 type raftLog struct{}
 
-func (raftLog) AppendEntry(entry []byte) {
+func (raftLog) AppendEntry(entry []byte) (int64, error) {
 	panic("implement me")
 }
