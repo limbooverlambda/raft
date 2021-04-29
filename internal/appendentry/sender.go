@@ -1,5 +1,10 @@
 package appendentry
 
+import (
+	"log"
+	"time"
+)
+
 //Entry
 // term leader’s term
 // leaderId so follower can redirect clients
@@ -32,3 +37,33 @@ type Response struct {
 type Sender interface {
 	ForwardEntry(entry Entry)
 }
+
+func NewSender() Sender {
+	bufferChan := make(chan Entry, 100)
+	go senderSiphon(bufferChan)
+	return &sender{
+		bufferChan: bufferChan,
+	}
+}
+
+func senderSiphon(bufferChan chan Entry) {
+	for entry := range bufferChan {
+		go func() {
+			log.Printf("Forwarding entry to peer %v\n", entry)
+			time.Sleep(300 * time.Millisecond)
+			entry.RespChan <- Response{
+				Term:    0,
+				Success: true,
+			}
+		}()
+	}
+}
+
+type sender struct{
+	bufferChan chan Entry
+}
+
+func (s *sender) ForwardEntry(entry Entry) {
+	s.bufferChan <- entry
+}
+

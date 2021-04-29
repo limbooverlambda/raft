@@ -1,7 +1,11 @@
 package locator
 
 import (
+	appendentrysender "github.com/kitengo/raft/internal/appendentry"
+	raftapplicator "github.com/kitengo/raft/internal/applicator"
 	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
+	raftlog "github.com/kitengo/raft/internal/log"
+	raftmember "github.com/kitengo/raft/internal/member"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftterm "github.com/kitengo/raft/internal/term"
@@ -67,10 +71,16 @@ type RpcLocator interface {
 }
 
 func NewRpcLocator() RpcLocator {
+	raftLog := raftlog.NewRaftLog()
+	raftMember := raftmember.NewRaftMember()
+	sender := appendentrysender.NewSender()
+	index := raftstate.NewRaftIndex()
+	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{
 		raftAppend:        raftrpc.NewRaftAppendEntry(),
 		raftRequestVote:   raftrpc.NewRaftRequestVote(),
-		raftClientCommand: raftrpc.NewRaftClientCommand(),
+		raftClientCommand: raftrpc.NewRaftClientCommand(raftLog,
+			raftMember, sender, index, raftApplicator),
 	}
 }
 

@@ -1,5 +1,9 @@
 package log
 
+import (
+	"log"
+)
+
 type RaftLog interface {
 	AppendEntry(entry []byte) (int64, error)
 }
@@ -11,5 +15,6 @@ func NewRaftLog() RaftLog {
 type raftLog struct{}
 
 func (raftLog) AppendEntry(entry []byte) (int64, error) {
-	panic("implement me")
+	log.Println("Appending Entry to log")
+	return 1, nil
 }

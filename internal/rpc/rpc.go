@@ -162,10 +162,19 @@ type ClientCommandResponse struct {
 	Committed bool
 }
 
-func NewRaftClientCommand() RaftRpc {
+func NewRaftClientCommand(raftLog raftlog.RaftLog,
+	raftMember member.RaftMember,
+	sender appendentry.Sender,
+	index *raftstate.RaftIndex,
+	raftApplicator applicator.RaftApplicator) RaftRpc {
 	clientCommandChan := make(chan RaftRpcRequest, 1)
 	return &raftClientCommand{
 		clientCommandChan: clientCommandChan,
+		raftLog:           raftLog,
+		raftMember:        raftMember,
+		appendEntrySender: sender,
+		raftIndex:         index,
+		raftApplicator:    raftApplicator,
 	}
 }
 
@@ -207,7 +216,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 		return nil, err
 	}
 	//Send the appendEntry requests to all the peers
-	respChan := make(chan appendentry.Response)
+	respChan := make(chan appendentry.Response, len(members))
 	for _, member := range members {
 		rcc.appendEntrySender.ForwardEntry(appendentry.Entry{
 			MemberID: member.ID,
@@ -233,7 +242,7 @@ func (rcc *raftClientCommand) waitForMajorityAcks(memberCount int,
 	respChan chan appendentry.Response) (err error) {
 	deadlineChan := time.After(deadlineTime)
 	var voteCount int
-	majorityCount := memberCount/2 + 1
+	majorityCount := (memberCount >> 1) + 1
 	for {
 		select {
 		case t := <-deadlineChan:
