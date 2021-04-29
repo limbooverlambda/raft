@@ -7,6 +7,7 @@ import (
 	raftlog "github.com/kitengo/raft/internal/log"
 	"github.com/kitengo/raft/internal/member"
 	raftstate "github.com/kitengo/raft/internal/state"
+	"github.com/kitengo/raft/internal/term"
 	"log"
 	"time"
 )
@@ -162,7 +163,9 @@ type ClientCommandResponse struct {
 	Committed bool
 }
 
-func NewRaftClientCommand(raftLog raftlog.RaftLog,
+func NewRaftClientCommand(
+	raftTerm term.RaftTerm,
+	raftLog raftlog.RaftLog,
 	raftMember member.RaftMember,
 	sender appendentry.Sender,
 	index *raftstate.RaftIndex,
@@ -170,6 +173,7 @@ func NewRaftClientCommand(raftLog raftlog.RaftLog,
 	clientCommandChan := make(chan RaftRpcRequest, 1)
 	return &raftClientCommand{
 		clientCommandChan: clientCommandChan,
+		raftTerm:          raftTerm,
 		raftLog:           raftLog,
 		raftMember:        raftMember,
 		appendEntrySender: sender,
@@ -180,6 +184,7 @@ func NewRaftClientCommand(raftLog raftlog.RaftLog,
 
 type raftClientCommand struct {
 	clientCommandChan chan RaftRpcRequest
+	raftTerm          term.RaftTerm
 	raftLog           raftlog.RaftLog
 	raftMember        member.RaftMember
 	appendEntrySender appendentry.Sender
@@ -204,7 +209,10 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	log.Printf("Processing client request %v\n", meta)
 	//Append the entry to the log
 	clientCommandMeta := meta.(ClientCommandMeta)
-	offset, err := rcc.raftLog.AppendEntry(clientCommandMeta.Payload)
+	offset, _, err := rcc.raftLog.AppendEntry(raftlog.Entry{
+		Term:    rcc.raftTerm.GetTerm(),
+		Payload: clientCommandMeta.Payload,
+	})
 	if err != nil {
 		log.Printf("unable to append entry to log due to %v\n", err)
 		return nil, err

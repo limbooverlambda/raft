@@ -2,7 +2,6 @@ package appendentry
 
 import (
 	"log"
-	"time"
 )
 
 //Entry
@@ -33,7 +32,7 @@ type Response struct {
 //TODO: Spawn a go-routine that siphons messages from the send mailbox
 //TODO: Create the entry struct to be used by the sender. If the send is successful, send the success response into the entries success channel
 //TODO: If the send is a failure, mitigate by requeuing the payload back to the retry buffer
-//If there is a change in leadership, the go routine will be terminated
+//TODO: If there is a change in leadership, the go routine will be terminated. Add context for that
 type Sender interface {
 	ForwardEntry(entry Entry)
 }
@@ -50,7 +49,6 @@ func senderSiphon(bufferChan chan Entry) {
 	for entry := range bufferChan {
 		go func() {
 			log.Printf("Forwarding entry to peer %v\n", entry)
-			time.Sleep(300 * time.Millisecond)
 			entry.RespChan <- Response{
 				Term:    0,
 				Success: true,
