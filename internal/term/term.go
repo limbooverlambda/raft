@@ -19,14 +19,14 @@ type raftTerm struct{
 }
 
 func (rt *raftTerm) GetTerm() int64 {
-	defer rt.RUnlock()
 	rt.RLock()
+	defer rt.RUnlock()
 	return rt.term
 }
 
 func (rt *raftTerm) IncrementTerm() int64 {
-	defer rt.Unlock()
 	rt.Lock()
+	defer rt.Unlock()
 	rt.term += 1
 	return rt.term
 }
