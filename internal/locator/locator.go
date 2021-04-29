@@ -23,21 +23,22 @@ type ServiceLocator interface {
 }
 
 func NewServiceLocator() ServiceLocator {
+	term := raftterm.NewRaftTerm()
 	return &serviceLocator{
-		raftState: raftstate.NewRaftState(),
-		raftTerm: raftterm.NewRaftTerm(),
-		raftVoter: raftvoter.NewRaftVoter(),
+		raftState:     raftstate.NewRaftState(),
+		raftTerm:      term,
+		raftVoter:     raftvoter.NewRaftVoter(),
 		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(),
-		rpcLocator: NewRpcLocator(),
+		rpcLocator:    NewRpcLocator(term),
 	}
 }
 
-type serviceLocator struct{
-	raftState raftstate.RaftState
-	raftTerm raftterm.RaftTerm
-	raftVoter raftvoter.RaftVoter
+type serviceLocator struct {
+	raftState     raftstate.RaftState
+	raftTerm      raftterm.RaftTerm
+	raftVoter     raftvoter.RaftVoter
 	raftHeartbeat raftheartbeat.RaftHeartbeat
-	rpcLocator RpcLocator
+	rpcLocator    RpcLocator
 }
 
 func (sl *serviceLocator) GetRaftVoter() raftvoter.RaftVoter {
@@ -70,25 +71,28 @@ type RpcLocator interface {
 	GetClientCommandSvc() raftrpc.RaftRpc
 }
 
-func NewRpcLocator() RpcLocator {
-	raftLog := raftlog.NewRaftLog()
+func NewRpcLocator(term raftterm.RaftTerm) RpcLocator {
+	raftLog := raftlog.NewRaftLog("log")
 	raftMember := raftmember.NewRaftMember()
 	sender := appendentrysender.NewSender()
 	index := raftstate.NewRaftIndex()
 	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{
-		raftAppend:        raftrpc.NewRaftAppendEntry(),
-		raftRequestVote:   raftrpc.NewRaftRequestVote(),
-		raftClientCommand: raftrpc.NewRaftClientCommand(raftLog,
-			raftMember, sender, index, raftApplicator),
+		raftAppend:      raftrpc.NewRaftAppendEntry(),
+		raftRequestVote: raftrpc.NewRaftRequestVote(),
+		raftClientCommand: raftrpc.NewRaftClientCommand(term,
+			raftLog,
+			raftMember,
+			sender,
+			index,
+			raftApplicator),
 	}
 }
 
-type rpcLocator struct{
-	raftAppend raftrpc.RaftRpc
-	raftRequestVote raftrpc.RaftRpc
+type rpcLocator struct {
+	raftAppend        raftrpc.RaftRpc
+	raftRequestVote   raftrpc.RaftRpc
 	raftClientCommand raftrpc.RaftRpc
-
 }
 
 func (rpcl *rpcLocator) GetAppendEntrySvc() raftrpc.RaftRpc {
