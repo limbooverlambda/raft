@@ -211,7 +211,10 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	leader := rcc.raftMember.Leader()
 	payload := clientCommandMeta.Payload
 	aer, err := rcc.raftLog.AppendEntry(raftlog.Entry{
-		Term:    term,
+		Meta:    raftlog.EntryMeta{
+			Term:        uint64(term),
+			PayloadSize: uint64(len(payload)),
+		},
 		Payload: payload,
 	})
 	if err != nil {
@@ -232,7 +235,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 			RespChan:     respChan,
 			Term:         term,
 			LeaderID:     leader.ID,
-			PrevLogIndex: aer.PrevLogOffset,
+			PrevLogIndex: aer.PrevLogIndex,
 			PrevLogTerm:  aer.PrevLogTerm,
 			Entries:      payload,
 			LeaderCommit: aer.LogOffset,
