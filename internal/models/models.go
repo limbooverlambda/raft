@@ -29,10 +29,10 @@ type RequestConverter interface {
 type AppendEntryPayload struct {
 	Term         int64
 	LeaderId     string
-	PrevLogIndex int64
+	PrevLogIndex uint64
 	PrevLogTerm  int64
 	Entries      []byte
-	LeaderCommit int64
+	LeaderCommit uint64
 }
 
 func (aep *AppendEntryPayload) ToRequest() (Request, error) {
@@ -56,6 +56,16 @@ type ClientCommandPayload struct {
 
 func (ccp *ClientCommandPayload) ToRequest() (Request, error) {
 	return toRequestPayload(ClientCommand, ccp)
+}
+
+type AppendEntryResponse struct {
+	Term    int64
+	Success bool
+}
+
+func (aer *AppendEntryResponse) FromPayload(payload []byte) error {
+	decoder := gob.NewDecoder(bytes.NewBuffer(payload))
+	return decoder.Decode(aer)
 }
 
 type Response struct {

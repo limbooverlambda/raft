@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"github.com/kitengo/raft/internal/models"
 	"log"
 	"time"
 
@@ -73,7 +74,7 @@ func (l *leader) Run() {
 					errChan <- err
 				}
 				respChan <- resp
-				aeResp := resp.(raftrpc.AppendEntryResponse)
+				aeResp := resp.(models.AppendEntryResponse)
 				if aeResp.Term > currentTerm {
 					l.state.SetState(raftstate.FollowerState)
 					return
