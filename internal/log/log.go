@@ -24,8 +24,16 @@ type Entry struct {
 	Payload []byte
 }
 
+type AppendEntryResponse struct {
+	Term int64
+	LogSize uint64
+	LogOffset uint64
+	PrevLogTerm int64
+	PrevLogOffset uint64
+}
+
 type RaftLog interface {
-	AppendEntry(entry Entry) (offset uint64, position uint64, err error)
+	AppendEntry(entry Entry) (AppendEntryResponse, error)
 }
 
 func NewRaftLog(logID string) RaftLog {
@@ -64,30 +72,44 @@ type raftLog struct {
 	size uint64
 }
 
-func (rl *raftLog) AppendEntry(entry Entry) (offset uint64, position uint64, err error) {
+func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
 	log.Println("Appending Entry to log")
 	rl.Lock()
 	defer rl.Unlock()
+
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
-	err = encoder.Encode(entry)
+	err := encoder.Encode(entry)
+
 	if err != nil {
-		return 0, 0, err
+		return AppendEntryResponse{}, err
 	}
-	position = rl.size
+
+	position := rl.size
 	payload := buffer.Bytes()
+
 	if err := binary.Write(rl.buf, byteorder, uint64(len(payload))); err != nil {
-		return 0, 0, err
+		return AppendEntryResponse{}, err
 	}
+
 	w, err := rl.buf.Write(payload)
 	if err != nil {
-		return 0, 0, err
+		return AppendEntryResponse{}, err
 	}
+	//Flush to the disc right away
 	err = rl.buf.Flush()
 	if err != nil {
-		return 0, 0, err
+		return AppendEntryResponse{}, err
 	}
+
 	w += recordLengthInBytes
 	rl.size += uint64(w)
-	return uint64(w), position, nil
+
+	return AppendEntryResponse{
+		Term:          entry.Term,
+		LogSize:       rl.size,
+		LogOffset:     position,
+		PrevLogTerm:   0,
+		PrevLogOffset: 0,
+	}, nil
 }

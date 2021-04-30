@@ -6,6 +6,7 @@ import (
 	"github.com/kitengo/raft/internal/applicator"
 	raftlog "github.com/kitengo/raft/internal/log"
 	"github.com/kitengo/raft/internal/member"
+	"github.com/kitengo/raft/internal/models"
 	raftstate "github.com/kitengo/raft/internal/state"
 	"github.com/kitengo/raft/internal/term"
 	"log"
@@ -25,18 +26,15 @@ type RaftRpcRequest interface {
 type RaftRpcMeta interface{}
 type RaftRpcResponse interface{}
 
-type AppendEntryResponse struct {
-	Term    int64
-	Success bool
-}
+
 
 type AppendEntry struct {
 	Term         int64
 	LeaderId     string
-	PrevLogIndex int64
+	PrevLogIndex uint64
 	PrevLogTerm  int64
 	Entries      []byte
-	LeaderCommit int64
+	LeaderCommit uint64
 	RespChan     chan<- RaftRpcResponse
 	ErrorChan    chan<- error
 }
@@ -52,10 +50,10 @@ func (a AppendEntry) GetErrorChan() chan<- error {
 type AppendEntryMeta struct {
 	Term         int64
 	LeaderId     string
-	PrevLogIndex int64
+	PrevLogIndex uint64
 	PrevLogTerm  int64
 	Entries      []byte
-	LeaderCommit int64
+	LeaderCommit uint64
 }
 
 func NewRaftAppendEntry() RaftRpc {
@@ -76,7 +74,7 @@ func (ra raftAppendEntry) Receive(request RaftRpcRequest) {
 
 func (ra raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	log.Printf("Processing AppendEntry %v\n", meta)
-	return AppendEntryResponse{
+	return models.AppendEntryResponse{
 		Term:    1,
 		Success: false,
 	}, nil
@@ -209,9 +207,12 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	log.Printf("Processing client request %v\n", meta)
 	//Append the entry to the log
 	clientCommandMeta := meta.(ClientCommandMeta)
-	offset, _, err := rcc.raftLog.AppendEntry(raftlog.Entry{
-		Term:    rcc.raftTerm.GetTerm(),
-		Payload: clientCommandMeta.Payload,
+	term := rcc.raftTerm.GetTerm()
+	leader := rcc.raftMember.Leader()
+	payload := clientCommandMeta.Payload
+	aer, err := rcc.raftLog.AppendEntry(raftlog.Entry{
+		Term:    term,
+		Payload: payload,
 	})
 	if err != nil {
 		log.Printf("unable to append entry to log due to %v\n", err)
@@ -224,22 +225,29 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 		return nil, err
 	}
 	//Send the appendEntry requests to all the peers
-	respChan := make(chan appendentry.Response, len(members))
+	respChan := make(chan models.AppendEntryResponse, len(members))
 	for _, member := range members {
 		rcc.appendEntrySender.ForwardEntry(appendentry.Entry{
-			MemberID: member.ID,
-			RespChan: respChan,
+			MemberID:     member.ID,
+			RespChan:     respChan,
+			Term:         term,
+			LeaderID:     leader.ID,
+			PrevLogIndex: aer.PrevLogOffset,
+			PrevLogTerm:  aer.PrevLogTerm,
+			Entries:      payload,
+			LeaderCommit: aer.LogOffset,
+			MemberAddr:   member.Address,
 		})
 	}
 	if err = rcc.waitForMajorityAcks(len(members), 100*time.Millisecond, respChan); err != nil {
 		return ClientCommandResponse{Committed: false}, nil
 	}
 	//If majority votes are received, set the commit index
-	rcc.raftIndex.SetCommitOffset(offset)
+	rcc.raftIndex.SetCommitOffset(aer.LogOffset)
 	//Apply the command
-	if err = rcc.raftApplicator.Apply(clientCommandMeta.Payload); err == nil {
+	if err = rcc.raftApplicator.Apply(payload); err == nil {
 		//Upon successful application, set the applyIndex
-		rcc.raftIndex.SetApplyOffset(offset)
+		rcc.raftIndex.SetApplyOffset(aer.LogOffset)
 	}
 	//send the ClientCommandResponse with Committed set to true
 	return ClientCommandResponse{Committed: true}, nil
@@ -247,7 +255,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 
 func (rcc *raftClientCommand) waitForMajorityAcks(memberCount int,
 	deadlineTime time.Duration,
-	respChan chan appendentry.Response) (err error) {
+	respChan chan models.AppendEntryResponse) (err error) {
 	deadlineChan := time.After(deadlineTime)
 	var voteCount int
 	majorityCount := (memberCount >> 1) + 1

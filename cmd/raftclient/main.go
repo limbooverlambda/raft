@@ -1,13 +1,10 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
-	"github.com/spf13/cobra"
-	"log"
-	"net"
-
 	raftmodels "github.com/kitengo/raft/internal/models"
+	raftsender "github.com/kitengo/raft/internal/sender"
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
@@ -27,7 +24,7 @@ var clientCmd = &cobra.Command{
 		clientCommand := &raftmodels.ClientCommandPayload{
 			ClientCommand: []byte(payload),
 		}
-		sendCommand(clientCommand,ip)
+		raftsender.SendCommand(clientCommand,ip)
 	},
 }
 
@@ -38,9 +35,9 @@ var appendEntryCmd = &cobra.Command{
 		ip, _ := cmd.Flags().GetString("ip")
 		entries, _ := cmd.Flags().GetString("entries")
 		leaderID, _ := cmd.Flags().GetString("leaderid")
-		prevLogIndex, _ := cmd.Flags().GetInt64("prevlogindex")
+		prevLogIndex, _ := cmd.Flags().GetUint64("prevlogindex")
 		prevLogTerm, _ := cmd.Flags().GetInt64("prevlogterm")
-		leaderCommit, _ := cmd.Flags().GetInt64("leadercommit")
+		leaderCommit, _ := cmd.Flags().GetUint64("leadercommit")
 		term, _ := cmd.Flags().GetInt64("term")
 		fmt.Println("Sending ae command")
 		aeCommand := &raftmodels.AppendEntryPayload{
@@ -51,7 +48,7 @@ var appendEntryCmd = &cobra.Command{
 			Entries:      []byte(entries),
 			LeaderCommit: leaderCommit,
 		}
-		sendCommand(aeCommand, ip)
+		raftsender.SendCommand(aeCommand, ip)
 	},
 }
 
@@ -71,7 +68,7 @@ var requestVoteCmd = &cobra.Command{
 			LastLogIndex: lastLogIndex,
 			LastLogTerm:  lastLogTerm,
 		}
-		sendCommand(command, ip)
+		raftsender.SendCommand(command, ip)
 	},
 }
 
@@ -101,36 +98,5 @@ func main() {
 	rootCmd.Execute()
 }
 
-func sendCommand(requestConv raftmodels.RequestConverter, ipAddress string) {
-	//TODO: Have the mocks return happy path payloads for the local setup
-	conn, err := net.Dial("tcp", ipAddress)
-	if err != nil {
-		log.Panic("Unable to dial due to", err)
-	}
-	defer conn.Close()
-	req, err := requestConv.ToRequest()
-	if err != nil {
-		log.Panic("Unable to serialize client comand request", err)
-	}
-	connEncoder := gob.NewEncoder(conn)
-	err = connEncoder.Encode(req)
-	if err != nil {
-		log.Panic("Unable to send client command request", err)
-	}
-	recvChan := make(chan struct{})
-	go func() {
-		defer close(recvChan)
-		connDecoder := gob.NewDecoder(conn)
-		response := &raftmodels.Response{}
-		err := connDecoder.Decode(response)
-		if err != nil {
-			log.Printf("Unable to decode response %v\n", err)
-			return
-		}
-		log.Printf("Got response %v\n", string(response.Payload))
-	}()
-	<-recvChan
-	log.Println("Sent the client command request")
-}
 
 

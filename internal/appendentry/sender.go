@@ -1,7 +1,10 @@
 package appendentry
 
 import (
+	"github.com/kitengo/raft/internal/models"
+	client "github.com/kitengo/raft/internal/sender"
 	"log"
+	"time"
 )
 
 //Entry
@@ -14,24 +17,18 @@ import (
 //may send more than one for efficiency)
 //leaderCommit leader’s commitIndex
 type Entry struct {
-	MemberID string
-	RespChan chan <- Response
+	MemberID     string
+	RespChan     chan<- models.AppendEntryResponse
+	Term         int64
+	LeaderID     string
+	PrevLogIndex uint64
+	PrevLogTerm  int64
+	Entries      []byte
+	LeaderCommit uint64
+	MemberAddr   string
 }
 
-//Response
-//term currentTerm, for leader to update itself
-//success true if follower contained entry matching
-//prevLogIndex and prevLogTerm
-type Response struct {
-	Term    int64
-	Success bool
-}
 //Sender
-//TODO: Create a struct for the mailbox, this will be the retry buffer
-//TODO: Create the Add the AppendEntry payload to the send mailbox. Create the sender interface
-//TODO: Spawn a go-routine that siphons messages from the send mailbox
-//TODO: Create the entry struct to be used by the sender. If the send is successful, send the success response into the entries success channel
-//TODO: If the send is a failure, mitigate by requeuing the payload back to the retry buffer
 //TODO: If there is a change in leadership, the go routine will be terminated. Add context for that
 type Sender interface {
 	ForwardEntry(entry Entry)
@@ -48,20 +45,51 @@ func NewSender() Sender {
 func senderSiphon(bufferChan chan Entry) {
 	for entry := range bufferChan {
 		go func() {
+			var err error
+			defer func() {
+				if err != nil {
+					delayedAction(time.Second, func() {
+						bufferChan <- entry
+					})
+				}
+			}()
 			log.Printf("Forwarding entry to peer %v\n", entry)
-			entry.RespChan <- Response{
-				Term:    0,
-				Success: true,
+			aePayload := models.AppendEntryPayload{
+				Term:         entry.Term,
+				LeaderId:     entry.LeaderID,
+				PrevLogIndex: entry.PrevLogIndex,
+				PrevLogTerm:  entry.PrevLogTerm,
+				Entries:      entry.Entries,
+				LeaderCommit: entry.LeaderCommit,
 			}
+			resp, err := client.SendCommand(&aePayload, entry.MemberAddr)
+			if err != nil {
+				//Requeue the entry back into the buffer channel
+				log.Printf("Unable to send AppendEntry request, retrying")
+				return
+			}
+			var aeResp models.AppendEntryResponse
+			err = aeResp.FromPayload(resp.Payload)
+			if err != nil {
+				log.Printf("Unable to decode AppendEntry response, retrying")
+				return
+			}
+			entry.RespChan <- aeResp
 		}()
 	}
 }
 
-type sender struct{
+func delayedAction(second time.Duration, f func()) {
+	ticker := time.NewTicker(second)
+	defer ticker.Stop()
+	<-ticker.C
+	f()
+}
+
+type sender struct {
 	bufferChan chan Entry
 }
 
 func (s *sender) ForwardEntry(entry Entry) {
 	s.bufferChan <- entry
 }
-

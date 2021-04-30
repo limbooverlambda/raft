@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"github.com/kitengo/raft/internal/models"
 	"log"
 	"time"
 
@@ -71,7 +72,7 @@ func (c *candidate) Run() {
 			}
 			respChan <- resp
 			//reset the deadline
-			aeResp := resp.(raftrpc.AppendEntryResponse)
+			aeResp := resp.(models.AppendEntryResponse)
 			if aeResp.Term > term {
 				c.state.SetState(raftstate.FollowerState)
 				return

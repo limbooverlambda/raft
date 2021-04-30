@@ -6,10 +6,12 @@ import (
 
 type Entry struct {
 	ID string
+	Address string
 }
 
 type RaftMember interface {
 	List() ([]Entry, error)
+	Leader() Entry
 }
 
 func NewRaftMember() RaftMember {
@@ -18,7 +20,14 @@ func NewRaftMember() RaftMember {
 
 type raftMember struct{}
 
+func (rm *raftMember) Leader() Entry {
+	return Entry{
+		ID:      "id4",
+		Address: "",
+	}
+}
+
 func (rm *raftMember) List() ([]Entry, error) {
 	log.Println("Listing the members of the cluster")
-	return []Entry{{"id1"},{"id2"}, {"id3"}}, nil
+	return []Entry{{ID:"id1"},{ID:"id2"}, {ID:"id3"}}, nil
 }
