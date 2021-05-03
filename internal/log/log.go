@@ -2,10 +2,9 @@ package log
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -16,24 +15,33 @@ var (
 )
 
 const (
-	recordLengthInBytes = 8
+	recordLengthInBytes   = 8
+	metadataLengthInBytes = 24
 )
 
+type EntryMeta struct {
+	Index       uint64
+	Term        uint64
+	PayloadSize uint64
+}
+
 type Entry struct {
-	Term    int64
+	Meta    EntryMeta
 	Payload []byte
 }
 
 type AppendEntryResponse struct {
-	Term int64
-	LogSize uint64
-	LogOffset uint64
-	PrevLogTerm int64
-	PrevLogOffset uint64
+	Term         int64
+	LogIndex     uint64
+	LogSize      uint64
+	LogOffset    uint64
+	PrevLogTerm  int64
+	PrevLogIndex uint64
 }
 
 type RaftLog interface {
 	AppendEntry(entry Entry) (AppendEntryResponse, error)
+	ReadLastEntryMeta() (EntryMeta, error)
 }
 
 func NewRaftLog(logID string) RaftLog {
@@ -68,31 +76,60 @@ type raftLog struct {
 	logID string
 	*os.File
 	sync.Mutex
-	buf  *bufio.Writer
-	size uint64
+	buf      *bufio.Writer
+	size     uint64
+	position uint64
+}
+
+func (rl *raftLog) ReadLastEntryMeta() (EntryMeta, error) {
+	rl.Lock()
+	defer rl.Unlock()
+	metadataBytes := make([]byte, metadataLengthInBytes)
+
+	_, err := rl.File.ReadAt(metadataBytes, int64(rl.position))
+	if err != nil {
+		return EntryMeta{}, err
+	}
+
+	return EntryMeta{
+		Index:       byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
+		Term:        byteorder.Uint64(metadataBytes[recordLengthInBytes: recordLengthInBytes+8]),
+		PayloadSize: byteorder.Uint64(metadataBytes[recordLengthInBytes+8: recordLengthInBytes+16]),
+	}, nil
 }
 
 func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
-	log.Println("Appending Entry to log")
+	var prevEntryIndex, prevEntryTerm uint64
+	prevEntryMeta, err :=  rl.ReadLastEntryMeta()
+	if err != nil {
+		if err != io.EOF {
+			log.Println("Unable to read previous value")
+			return AppendEntryResponse{}, err
+		}
+	}
+	prevEntryTerm = prevEntryMeta.Term
+	prevEntryIndex = prevEntryMeta.Index
+
 	rl.Lock()
 	defer rl.Unlock()
 
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	err := encoder.Encode(entry)
 
-	if err != nil {
+	rl.position = rl.size
+
+	entry.Meta.Index = prevEntryIndex + 1
+	if err := binary.Write(rl.buf, byteorder, entry.Meta.Index); err != nil {
 		return AppendEntryResponse{}, err
 	}
 
-	position := rl.size
-	payload := buffer.Bytes()
-
-	if err := binary.Write(rl.buf, byteorder, uint64(len(payload))); err != nil {
+	if err := binary.Write(rl.buf, byteorder, entry.Meta.Term); err != nil {
 		return AppendEntryResponse{}, err
 	}
 
-	w, err := rl.buf.Write(payload)
+	if err := binary.Write(rl.buf, byteorder, entry.Meta.PayloadSize); err != nil {
+		return AppendEntryResponse{}, err
+	}
+
+	w, err := rl.buf.Write(entry.Payload)
 	if err != nil {
 		return AppendEntryResponse{}, err
 	}
@@ -102,14 +139,14 @@ func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
 		return AppendEntryResponse{}, err
 	}
 
-	w += recordLengthInBytes
+	w += metadataLengthInBytes
 	rl.size += uint64(w)
 
 	return AppendEntryResponse{
-		Term:          entry.Term,
-		LogSize:       rl.size,
-		LogOffset:     position,
-		PrevLogTerm:   0,
-		PrevLogOffset: 0,
+		Term:         int64(entry.Meta.Term),
+		LogSize:      rl.size,
+		LogOffset:    entry.Meta.Index,
+		PrevLogTerm:  int64(prevEntryTerm),
+		PrevLogIndex: prevEntryIndex,
 	}, nil
 }
