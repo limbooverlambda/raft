@@ -42,6 +42,8 @@ type AppendEntryResponse struct {
 type RaftLog interface {
 	AppendEntry(entry Entry) (AppendEntryResponse, error)
 	ReadLastEntryMeta() (EntryMeta, error)
+	GetLogEntryAtIndex(index uint64) (EntryMeta, error)
+	TruncateFromIndex(index uint64) error
 }
 
 func NewRaftLog(logID string) RaftLog {
@@ -79,6 +81,14 @@ type raftLog struct {
 	buf      *bufio.Writer
 	size     uint64
 	position uint64
+}
+
+func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
+	panic("implement me")
+}
+
+func (rl *raftLog) TruncateFromIndex(index uint64) error {
+	panic("implement me")
 }
 
 func (rl *raftLog) ReadLastEntryMeta() (EntryMeta, error) {
