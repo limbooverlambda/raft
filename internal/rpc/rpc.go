@@ -88,6 +88,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex
 	//    whose term matches prevLogTerm (§5.3)
 	prevLogIndex := appendEntryMeta.PrevLogIndex
+	//TODO: Implement GetLogEntryAtIndex
 	em, err := ra.raftLog.GetLogEntryAtIndex(prevLogIndex)
 	if err != nil {
 		log.Printf("Encountered error while querying log for index")
@@ -97,6 +98,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		// 3. If an existing entry conflicts with a new one (same index
 		//    but different terms), delete the existing entry and all that
 		//    follow it (§5.3)
+		//TODO: Implement Truncate from Index
 		err := ra.raftLog.TruncateFromIndex(prevLogIndex)
 		if err != nil {
 			log.Printf("Encountered error while truncating log")
@@ -105,10 +107,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	}
 	// 4. Append any new entries not already in the log
 	resp, err := ra.raftLog.AppendEntry(raftlog.Entry{
-		Meta: raftlog.EntryMeta{
-			Term:        uint64(appendEntryMeta.Term),
-			PayloadSize: uint64(len(appendEntryMeta.Entries)),
-		},
+		Term: uint64(appendEntryMeta.Term),
 		Payload: appendEntryMeta.Entries,
 	})
 	// 5. If leaderCommit > commitIndex, set commitIndex =
@@ -254,10 +253,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	leader := rcc.raftMember.Leader()
 	payload := clientCommandMeta.Payload
 	aer, err := rcc.raftLog.AppendEntry(raftlog.Entry{
-		Meta: raftlog.EntryMeta{
-			Term:        uint64(term),
-			PayloadSize: uint64(len(payload)),
-		},
+		Term:    uint64(term),
 		Payload: payload,
 	})
 	if err != nil {
@@ -281,7 +277,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 			PrevLogIndex: aer.PrevLogIndex,
 			PrevLogTerm:  aer.PrevLogTerm,
 			Entries:      payload,
-			LeaderCommit: aer.LogOffset,
+			LeaderCommit: rcc.raftIndex.GetCommitOffset(),
 			MemberAddr:   member.Address,
 		})
 	}
@@ -289,11 +285,11 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 		return ClientCommandResponse{Committed: false}, nil
 	}
 	//If majority votes are received, set the commit index
-	rcc.raftIndex.SetCommitOffset(aer.LogOffset)
+	rcc.raftIndex.SetCommitOffset(aer.LogIndex)
 	//Apply the command
 	if err = rcc.raftApplicator.Apply(payload); err == nil {
 		//Upon successful application, set the applyIndex
-		rcc.raftIndex.SetApplyOffset(aer.LogOffset)
+		rcc.raftIndex.SetApplyOffset(aer.LogIndex)
 	}
 	//send the ClientCommandResponse with Committed set to true
 	return ClientCommandResponse{Committed: true}, nil
