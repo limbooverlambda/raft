@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"sync"
 )
@@ -26,38 +24,49 @@ type EntryMeta struct {
 }
 
 type Entry struct {
-	Meta    EntryMeta
+	Term    uint64
 	Payload []byte
 }
 
 type AppendEntryResponse struct {
 	Term         int64
 	LogIndex     uint64
-	LogSize      uint64
-	LogOffset    uint64
 	PrevLogTerm  int64
 	PrevLogIndex uint64
 }
 
+//RaftLog is an abstraction around the index and the raw commands to the
+//replicated state machine.
+// - Create an index file
+// - Create the raw log file
+// - Add the EntryMeta to the index file
 type RaftLog interface {
 	AppendEntry(entry Entry) (AppendEntryResponse, error)
-	ReadLastEntryMeta() (EntryMeta, error)
+	GetLogEntryAtIndex(index uint64) (EntryMeta, error)
+	TruncateFromIndex(index uint64) error
 }
 
 func NewRaftLog(logID string) RaftLog {
-	f, size, err := openLogFile(logID)
+	logFile, logSize, err := openFile(logID)
 	if err != nil {
 		panic(fmt.Errorf("unable to open log file due to %v", err))
 	}
+	idxFile, idxSize, err := openFile(logID + "_idx")
+	if err != nil {
+		panic(fmt.Errorf("unable to open index file due to %v", err))
+	}
 	return &raftLog{
-		logID: logID,
-		File:  f,
-		buf:   bufio.NewWriter(f),
-		size:  uint64(size),
+		logID:   logID,
+		logFile: logFile,
+		logBuf:  bufio.NewWriter(logFile),
+		logSize: uint64(logSize),
+		idxFile: idxFile,
+		idxBuf:  bufio.NewWriter(idxFile),
+		idxSize: uint64(idxSize),
 	}
 }
 
-func openLogFile(id string) (f *os.File, size int64, err error) {
+func openFile(id string) (f *os.File, size int64, err error) {
 	f, err = os.OpenFile(id,
 		os.O_RDWR|os.O_CREATE|os.O_APPEND,
 		0644,
@@ -74,79 +83,96 @@ func openLogFile(id string) (f *os.File, size int64, err error) {
 
 type raftLog struct {
 	logID string
-	*os.File
-	sync.Mutex
-	buf      *bufio.Writer
-	size     uint64
-	position uint64
+	sync.RWMutex
+	logFile     *os.File
+	logBuf      *bufio.Writer
+	idxFile     *os.File
+	idxBuf      *bufio.Writer
+	idxSize     uint64
+	logSize     uint64
+	logPosition uint64
+	logTerm     uint64
+	logIndex    uint64
 }
 
-func (rl *raftLog) ReadLastEntryMeta() (EntryMeta, error) {
-	rl.Lock()
-	defer rl.Unlock()
+func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
+	rl.RLock()
+	defer rl.RUnlock()
 	metadataBytes := make([]byte, metadataLengthInBytes)
-
-	_, err := rl.File.ReadAt(metadataBytes, int64(rl.position))
+	offset := (index - 1) * metadataLengthInBytes
+	_, err := rl.idxFile.ReadAt(metadataBytes, int64(offset))
 	if err != nil {
 		return EntryMeta{}, err
 	}
+	_, logTerm, logPayloadSize := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes : recordLengthInBytes+8]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes+8 : recordLengthInBytes+16])
 
 	return EntryMeta{
-		Index:       byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
-		Term:        byteorder.Uint64(metadataBytes[recordLengthInBytes: recordLengthInBytes+8]),
-		PayloadSize: byteorder.Uint64(metadataBytes[recordLengthInBytes+8: recordLengthInBytes+16]),
+		Index:       index,
+		Term:        logTerm,
+		PayloadSize: logPayloadSize,
 	}, nil
 }
 
-func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
-	var prevEntryIndex, prevEntryTerm uint64
-	prevEntryMeta, err :=  rl.ReadLastEntryMeta()
-	if err != nil {
-		if err != io.EOF {
-			log.Println("Unable to read previous value")
-			return AppendEntryResponse{}, err
-		}
+func (rl *raftLog) TruncateFromIndex(index uint64) error {
+	rl.Lock()
+	defer rl.Unlock()
+	idxTruncationSize := rl.idxSize - (index - 1) * metadataLengthInBytes
+	if err := rl.idxFile.Truncate(int64(idxTruncationSize)); err != nil {
+		return err
 	}
-	prevEntryTerm = prevEntryMeta.Term
-	prevEntryIndex = prevEntryMeta.Index
+	rl.idxSize = idxTruncationSize
+	rl.logIndex = index - 1
+	return nil
+}
 
+func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
 	rl.Lock()
 	defer rl.Unlock()
 
-
-	rl.position = rl.size
-
-	entry.Meta.Index = prevEntryIndex + 1
-	if err := binary.Write(rl.buf, byteorder, entry.Meta.Index); err != nil {
-		return AppendEntryResponse{}, err
-	}
-
-	if err := binary.Write(rl.buf, byteorder, entry.Meta.Term); err != nil {
-		return AppendEntryResponse{}, err
-	}
-
-	if err := binary.Write(rl.buf, byteorder, entry.Meta.PayloadSize); err != nil {
-		return AppendEntryResponse{}, err
-	}
-
-	w, err := rl.buf.Write(entry.Payload)
+	logPosition := rl.logSize
+	w, err := rl.logBuf.Write(entry.Payload)
 	if err != nil {
 		return AppendEntryResponse{}, err
 	}
 	//Flush to the disc right away
-	err = rl.buf.Flush()
+	err = rl.logBuf.Flush()
+	if err != nil {
+		return AppendEntryResponse{}, err
+	}
+	rl.logSize += uint64(w)
+	//Add the position, term and payload size to the index
+	if err := binary.Write(rl.idxBuf, byteorder, logPosition); err != nil {
+		return AppendEntryResponse{}, err
+	}
+
+	if err := binary.Write(rl.idxBuf, byteorder, entry.Term); err != nil {
+		return AppendEntryResponse{}, err
+	}
+
+	if err := binary.Write(rl.logBuf, byteorder, len(entry.Payload)); err != nil {
+		return AppendEntryResponse{}, err
+	}
+
+	//Flush to the disc right away
+	err = rl.idxBuf.Flush()
 	if err != nil {
 		return AppendEntryResponse{}, err
 	}
 
-	w += metadataLengthInBytes
-	rl.size += uint64(w)
+	//prevLogTerm and prevLogIndex
+	prevLogTerm := rl.logTerm
+	prevLogIdx := rl.logIndex
+
+	//Reset the log term and index
+	rl.logTerm = entry.Term
+	rl.logIndex = prevLogIdx + 1
 
 	return AppendEntryResponse{
-		Term:         int64(entry.Meta.Term),
-		LogSize:      rl.size,
-		LogOffset:    entry.Meta.Index,
-		PrevLogTerm:  int64(prevEntryTerm),
-		PrevLogIndex: prevEntryIndex,
+		Term:         int64(rl.logTerm),
+		LogIndex:     rl.logIndex,
+		PrevLogTerm:  int64(prevLogTerm),
+		PrevLogIndex: prevLogIdx,
 	}, nil
 }
