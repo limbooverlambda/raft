@@ -88,7 +88,6 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex
 	//    whose term matches prevLogTerm (§5.3)
 	prevLogIndex := appendEntryMeta.PrevLogIndex
-	//TODO: Implement GetLogEntryAtIndex
 	em, err := ra.raftLog.GetLogEntryAtIndex(prevLogIndex)
 	if err != nil {
 		log.Printf("Encountered error while querying log for index")
@@ -98,7 +97,6 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		// 3. If an existing entry conflicts with a new one (same index
 		//    but different terms), delete the existing entry and all that
 		//    follow it (§5.3)
-		//TODO: Implement Truncate from Index
 		err := ra.raftLog.TruncateFromIndex(prevLogIndex)
 		if err != nil {
 			log.Printf("Encountered error while truncating log")
