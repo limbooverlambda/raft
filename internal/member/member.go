@@ -12,6 +12,7 @@ type Entry struct {
 type RaftMember interface {
 	List() ([]Entry, error)
 	Leader() Entry
+	Self() Entry
 }
 
 func NewRaftMember() RaftMember {
@@ -19,6 +20,10 @@ func NewRaftMember() RaftMember {
 }
 
 type raftMember struct{}
+
+func (rm *raftMember) Self() Entry {
+	panic("implement me")
+}
 
 func (rm *raftMember) Leader() Entry {
 	return Entry{
