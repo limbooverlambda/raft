@@ -5,7 +5,7 @@ import (
 	raftmember "github.com/kitengo/raft/internal/member"
 	raftmodels "github.com/kitengo/raft/internal/models"
 	"github.com/kitengo/raft/internal/sender"
-	"github.com/kitengo/raft/internal/term"
+	raftterm "github.com/kitengo/raft/internal/term"
 	"log"
 )
 
@@ -21,14 +21,20 @@ type RaftVoter interface {
 	RequestVote(term int64) <-chan VoteStatus
 }
 
-func NewRaftVoter() RaftVoter {
-	return &raftVoter{}
+func NewRaftVoter(raftMember raftmember.RaftMember,
+	raftLog raftlog.RaftLog,
+	raftTerm raftterm.RaftTerm) RaftVoter {
+	return &raftVoter{
+		raftMember: raftMember,
+		raftLog:    raftLog,
+		raftTerm:   raftTerm,
+	}
 }
 
 type raftVoter struct {
 	raftMember raftmember.RaftMember
 	raftLog    raftlog.RaftLog
-	raftTerm   term.RaftTerm
+	raftTerm   raftterm.RaftTerm
 }
 
 func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {

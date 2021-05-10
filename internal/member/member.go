@@ -22,7 +22,10 @@ func NewRaftMember() RaftMember {
 type raftMember struct{}
 
 func (rm *raftMember) Self() Entry {
-	panic("implement me")
+	return Entry{
+		ID:      "id2",
+		Address: "",
+	}
 }
 
 func (rm *raftMember) Leader() Entry {
