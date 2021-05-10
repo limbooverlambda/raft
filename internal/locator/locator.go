@@ -23,15 +23,16 @@ type ServiceLocator interface {
 }
 
 func NewServiceLocator() ServiceLocator {
-	term := raftterm.NewRaftTerm()
+	raftTerm := raftterm.NewRaftTerm()
 	raftMember := raftmember.NewRaftMember()
 	index := raftstate.NewRaftIndex()
+	raftLog := raftlog.NewRaftLog("log")
 	return &serviceLocator{
 		raftState:     raftstate.NewRaftState(),
-		raftTerm:      term,
-		raftVoter:     raftvoter.NewRaftVoter(),
-		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(term, raftMember, index),
-		rpcLocator:    NewRpcLocator(term, raftMember, index),
+		raftTerm:      raftTerm,
+		raftVoter:     raftvoter.NewRaftVoter(raftMember, raftLog, raftTerm),
+		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(raftTerm, raftMember, index),
+		rpcLocator:    NewRpcLocator(raftTerm, raftMember, index, raftLog),
 	}
 }
 
@@ -75,8 +76,9 @@ type RpcLocator interface {
 
 func NewRpcLocator(term raftterm.RaftTerm,
 	raftMember raftmember.RaftMember,
-	raftIndex *raftstate.RaftIndex) RpcLocator {
-	raftLog := raftlog.NewRaftLog("log")
+	raftIndex *raftstate.RaftIndex,
+	raftLog raftlog.RaftLog) RpcLocator {
+
 	sender := appendentrysender.NewSender()
 
 	raftApplicator := raftapplicator.NewRaftApplicator()

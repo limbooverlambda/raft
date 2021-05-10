@@ -20,7 +20,7 @@ const (
 type EntryMeta struct {
 	Index       uint64
 	Term        uint64
-	PayloadSize uint64
+	//PayloadSize uint64
 }
 
 type Entry struct {
@@ -44,6 +44,7 @@ type RaftLog interface {
 	AppendEntry(entry Entry) (AppendEntryResponse, error)
 	GetLogEntryAtIndex(index uint64) (EntryMeta, error)
 	TruncateFromIndex(index uint64) error
+	GetCurrentLogEntry() EntryMeta
 }
 
 func NewRaftLog(logID string) RaftLog {
@@ -95,6 +96,13 @@ type raftLog struct {
 	logIndex    uint64
 }
 
+func (rl *raftLog) GetCurrentLogEntry() EntryMeta {
+	return EntryMeta{
+		Index:       rl.logIndex,
+		Term:        rl.logTerm,
+	}
+}
+
 func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
 	rl.RLock()
 	defer rl.RUnlock()
@@ -104,14 +112,14 @@ func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
 	if err != nil {
 		return EntryMeta{}, err
 	}
-	_, logTerm, logPayloadSize := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
+	_, logTerm, _ := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
 		byteorder.Uint64(metadataBytes[recordLengthInBytes : recordLengthInBytes+8]),
 		byteorder.Uint64(metadataBytes[recordLengthInBytes+8 : recordLengthInBytes+16])
 
 	return EntryMeta{
 		Index:       index,
 		Term:        logTerm,
-		PayloadSize: logPayloadSize,
+		//PayloadSize: logPayloadSize,
 	}, nil
 }
 

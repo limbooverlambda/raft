@@ -68,6 +68,18 @@ func (aer *AppendEntryResponse) FromPayload(payload []byte) error {
 	return decoder.Decode(aer)
 }
 
+type RequestVoteResponse struct {
+	Term int64
+	VoteGranted bool
+}
+
+func (rvr *RequestVoteResponse) FromPayload(payload []byte) error {
+	decoder := gob.NewDecoder(bytes.NewBuffer(payload))
+	return decoder.Decode(rvr)
+}
+
+
+
 type Response struct {
 	Payload []byte
 }

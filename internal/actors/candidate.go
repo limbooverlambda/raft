@@ -18,7 +18,7 @@ type Candidate interface {
 	Run()
 }
 
-type candidate struct{
+type candidate struct {
 	state     raftstate.RaftState
 	term      raftterm.RaftTerm
 	voter     raftvoter.RaftVoter
@@ -49,49 +49,57 @@ func (c *candidate) Run() {
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
-		case vs := <- reqVoteChan:
+		case vs := <-reqVoteChan:
 			{
+				var state raftstate.State
+				if vs == raftvoter.Follower {
+					state = raftstate.FollowerState
+				}
 				if vs == raftvoter.Leader {
-					c.state.SetState(raftstate.LeaderState)
+					state = raftstate.LeaderState
+				}
+				c.state.SetState(state)
+				return
+
+			}
+		case aeReq := <-aeReqChan:
+			{
+				respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
+				aer := aeReq.(raftrpc.AppendEntry)
+				resp, err := c.aeRPC.Process(raftrpc.AppendEntryMeta{
+					Term:         aer.Term,
+					LeaderId:     aer.LeaderId,
+					PrevLogIndex: aer.PrevLogIndex,
+					PrevLogTerm:  aer.PrevLogTerm,
+					Entries:      aer.Entries,
+					LeaderCommit: aer.LeaderCommit,
+				})
+				if err != nil {
+					errChan <- err
+				}
+				respChan <- resp
+				//reset the deadline
+				aeResp := resp.(models.AppendEntryResponse)
+				if aeResp.Term > term {
+					c.state.SetState(raftstate.FollowerState)
 					return
 				}
 			}
-		case aeReq := <-aeReqChan:{
-			respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
-			aer := aeReq.(raftrpc.AppendEntry)
-			resp, err := c.aeRPC.Process(raftrpc.AppendEntryMeta{
-				Term:         aer.Term,
-				LeaderId:     aer.LeaderId,
-				PrevLogIndex: aer.PrevLogIndex,
-				PrevLogTerm:  aer.PrevLogTerm,
-				Entries:      aer.Entries,
-				LeaderCommit: aer.LeaderCommit,
-			})
-			if err != nil {
-				errChan <- err
+		case voteReq := <-voteReqChan:
+			{
+				respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
+				vr := voteReq.(raftrpc.RequestVote)
+				resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
+					Term:         vr.Term,
+					CandidateId:  vr.CandidateId,
+					LastLogIndex: vr.LastLogIndex,
+					LastLogTerm:  vr.LastLogTerm,
+				})
+				if err != nil {
+					errChan <- err
+				}
+				respChan <- resp
 			}
-			respChan <- resp
-			//reset the deadline
-			aeResp := resp.(models.AppendEntryResponse)
-			if aeResp.Term > term {
-				c.state.SetState(raftstate.FollowerState)
-				return
-			}
-		}
-		case voteReq := <-voteReqChan:{
-			respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
-			vr := voteReq.(raftrpc.RequestVote)
-			resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
-				Term:         vr.Term,
-				CandidateId:  vr.CandidateId,
-				LastLogIndex: vr.LastLogIndex,
-				LastLogTerm:  vr.LastLogTerm,
-			})
-			if err != nil {
-				errChan <- err
-			}
-			respChan <- resp
-		}
 		default:
 			if tick.After(c.raftTimer.GetDeadline()) {
 				term = c.term.IncrementTerm()
@@ -106,7 +114,7 @@ type CandidateProvider interface {
 	Provide() Candidate
 }
 
-type candidateProvider struct{
+type candidateProvider struct {
 	locator.ServiceLocator
 }
 
