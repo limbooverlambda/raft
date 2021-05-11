@@ -18,7 +18,7 @@ server:
 	cd $(RAFTSERVER_PATH);$(GOBUILD)
 
 server-clean:
-	cd $(RAFTSERVER_PATH);$(GOCLEAN);rm $(LOG_FILE);rm $(LOGIDX_FILE)
+	cd $(RAFTSERVER_PATH);$(GOCLEAN);rm -f $(LOG_FILE);rm -f $(LOGIDX_FILE)
 
 client:
 	cd $(RAFTCLIENT_PATH);$(GOBUILD)

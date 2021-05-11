@@ -81,6 +81,5 @@ func handleConnection(conn net.Conn, raftServer server.RaftServer) {
 				}
 			}
 		}
-		return
 	}
 }

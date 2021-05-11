@@ -44,6 +44,7 @@ func NewSender() Sender {
 
 func senderSiphon(bufferChan chan Entry) {
 	for entry := range bufferChan {
+		entry := entry
 		go func() {
 			var err error
 			defer func() {
