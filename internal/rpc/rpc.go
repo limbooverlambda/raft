@@ -68,7 +68,7 @@ type raftAppendEntry struct {
 	appendEntryChan chan RaftRpcRequest
 }
 
-func (ra raftAppendEntry) Receive(request RaftRpcRequest) {
+func (ra *raftAppendEntry) Receive(request RaftRpcRequest) {
 	appendEntry := request.(AppendEntry)
 	ra.appendEntryChan <- appendEntry
 }
@@ -105,7 +105,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	}
 	// 4. Append any new entries not already in the log
 	resp, err := ra.raftLog.AppendEntry(raftlog.Entry{
-		Term: uint64(appendEntryMeta.Term),
+		Term:    uint64(appendEntryMeta.Term),
 		Payload: appendEntryMeta.Entries,
 	})
 	// 5. If leaderCommit > commitIndex, set commitIndex =
@@ -120,7 +120,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	return models.AppendEntryResponse{Term: appendEntryMeta.Term, Success: true}, nil
 }
 
-func (ra raftAppendEntry) RaftRpcReqChan() <-chan RaftRpcRequest {
+func (ra *raftAppendEntry) RaftRpcReqChan() <-chan RaftRpcRequest {
 	return ra.appendEntryChan
 }
 
@@ -148,17 +148,26 @@ type RequestVoteMeta struct {
 	LastLogTerm  int64
 }
 
-type RequestVoteResponse struct{ Term int64 }
+type RequestVoteResponse struct {
+	Term        int64
+	VoteGranted bool
+}
 
-func NewRaftRequestVote() RaftRpc {
+func NewRaftRequestVote(raftTerm term.RaftTerm,
+	raftLog raftlog.RaftLog) RaftRpc {
 	requestVoteChan := make(chan RaftRpcRequest, 1)
 	return raftRequestVote{
 		requestVoteChan: requestVoteChan,
+		raftTerm:        raftTerm,
+		raftLog:         raftLog,
 	}
 }
 
 type raftRequestVote struct {
 	requestVoteChan chan RaftRpcRequest
+	raftTerm        term.RaftTerm
+	raftLog         raftlog.RaftLog
+	votedFor        string
 }
 
 func (rrV raftRequestVote) Receive(request RaftRpcRequest) {
@@ -166,9 +175,29 @@ func (rrV raftRequestVote) Receive(request RaftRpcRequest) {
 	rrV.requestVoteChan <- requestVote
 }
 
+/*
+Process
+  1. Reply false if term < currentTerm (§5.1)
+  2. If votedFor is null or candidateId, and candidate’s log is at
+      least as up-to-date as receiver’s log, grant vote (§5.2, §5.4)
+*/
 func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	log.Println("Received request vote", meta)
-	return RequestVoteResponse{Term: 1}, nil
+	requestVoteMeta := meta.(RequestVoteMeta)
+	currentTerm := rrV.raftTerm.GetTerm()
+	if requestVoteMeta.Term < currentTerm {
+		return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
+	}
+	votedFor := rrV.votedFor
+	if (votedFor == "" || votedFor == requestVoteMeta.CandidateId) &&
+		rrV.isLogUptoDate(requestVoteMeta) {
+		rrV.votedFor = requestVoteMeta.CandidateId
+		return RequestVoteResponse{
+			Term:        requestVoteMeta.Term,
+			VoteGranted: true,
+		}, nil
+	}
+	return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
 }
 
 func (rrV raftRequestVote) RaftRpcReqChan() <-chan RaftRpcRequest {
@@ -177,6 +206,25 @@ func (rrV raftRequestVote) RaftRpcReqChan() <-chan RaftRpcRequest {
 
 func (rrV raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
 	rrV.requestVoteChan <- requestVote
+}
+
+//Raft determines which of two logs is more up-to-date
+//by comparing the index and term of the last entries in the
+//logs. If the logs have last entries with different terms, then
+//the log with the later term is more up-to-date. If the logs
+//end with the same term, then whichever log is longer is
+//more up-to-date.
+func (rrV raftRequestVote) isLogUptoDate(meta RequestVoteMeta) bool {
+	entryMeta := rrV.raftLog.GetCurrentLogEntry()
+	currentTerm := int64(entryMeta.Term)
+	currentIndex := int64(entryMeta.Index)
+	if currentTerm < meta.LastLogTerm {
+		return true
+	}
+	if currentTerm == meta.LastLogTerm {
+		return meta.LastLogIndex > currentIndex
+	}
+	return false
 }
 
 type ClientCommand struct {
@@ -247,11 +295,11 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	log.Printf("Processing client request %v\n", meta)
 	//Append the entry to the log
 	clientCommandMeta := meta.(ClientCommandMeta)
-	term := rcc.raftTerm.GetTerm()
+	raftterm := rcc.raftTerm.GetTerm()
 	leader := rcc.raftMember.Leader()
 	payload := clientCommandMeta.Payload
 	aer, err := rcc.raftLog.AppendEntry(raftlog.Entry{
-		Term:    uint64(term),
+		Term:    uint64(raftterm),
 		Payload: payload,
 	})
 	if err != nil {
@@ -266,17 +314,17 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	}
 	//Send the appendEntry requests to all the peers
 	respChan := make(chan models.AppendEntryResponse, len(members))
-	for _, member := range members {
+	for _, m := range members {
 		rcc.appendEntrySender.ForwardEntry(appendentry.Entry{
-			MemberID:     member.ID,
+			MemberID:     m.ID,
 			RespChan:     respChan,
-			Term:         term,
+			Term:         raftterm,
 			LeaderID:     leader.ID,
 			PrevLogIndex: aer.PrevLogIndex,
 			PrevLogTerm:  aer.PrevLogTerm,
 			Entries:      payload,
 			LeaderCommit: rcc.raftIndex.GetCommitOffset(),
-			MemberAddr:   member.Address,
+			MemberAddr:   m.Address,
 		})
 	}
 	if err = rcc.waitForMajorityAcks(len(members), 100*time.Millisecond, respChan); err != nil {

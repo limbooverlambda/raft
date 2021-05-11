@@ -84,7 +84,7 @@ func NewRpcLocator(term raftterm.RaftTerm,
 	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{
 		raftAppend:      raftrpc.NewRaftAppendEntry(),
-		raftRequestVote: raftrpc.NewRaftRequestVote(),
+		raftRequestVote: raftrpc.NewRaftRequestVote(term, raftLog),
 		raftClientCommand: raftrpc.NewRaftClientCommand(term,
 			raftLog,
 			raftMember,
