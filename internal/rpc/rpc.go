@@ -88,7 +88,7 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex
 	//    whose term matches prevLogTerm (§5.3)
 	prevLogIndex := appendEntryMeta.PrevLogIndex
-	em, err := ra.raftLog.GetLogEntryAtIndex(prevLogIndex)
+	em, err := ra.raftLog.GetLogEntryMetaAtIndex(prevLogIndex)
 	if err != nil {
 		log.Printf("Encountered error while querying log for index")
 		return nil, err
@@ -315,7 +315,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 	//Send the appendEntry requests to all the peers
 	respChan := make(chan models.AppendEntryResponse, len(members))
 	for _, m := range members {
-		rcc.appendEntrySender.ForwardEntry(appendentry.Entry{
+		entry := appendentry.Entry{
 			MemberID:     m.ID,
 			RespChan:     respChan,
 			Term:         raftterm,
@@ -325,7 +325,8 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 			Entries:      payload,
 			LeaderCommit: rcc.raftIndex.GetCommitOffset(),
 			MemberAddr:   m.Address,
-		})
+		}
+		rcc.appendEntrySender.ForwardEntry(entry)
 	}
 	if err = rcc.waitForMajorityAcks(len(members), 100*time.Millisecond, respChan); err != nil {
 		return ClientCommandResponse{Committed: false}, nil
