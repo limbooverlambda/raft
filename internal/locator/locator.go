@@ -79,7 +79,7 @@ func NewRpcLocator(term raftterm.RaftTerm,
 	raftIndex *raftstate.RaftIndex,
 	raftLog raftlog.RaftLog) RpcLocator {
 
-	sender := appendentrysender.NewSender()
+	sender := appendentrysender.NewSender(raftLog)
 
 	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{

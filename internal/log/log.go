@@ -20,13 +20,15 @@ const (
 type EntryMeta struct {
 	Index       uint64
 	Term        uint64
-	//PayloadSize uint64
+	PayloadSize uint64
 }
 
 type Entry struct {
+	Index uint64
 	Term    uint64
 	Payload []byte
 }
+
 
 type AppendEntryResponse struct {
 	Term         int64
@@ -42,7 +44,8 @@ type AppendEntryResponse struct {
 // - Add the EntryMeta to the index file
 type RaftLog interface {
 	AppendEntry(entry Entry) (AppendEntryResponse, error)
-	GetLogEntryAtIndex(index uint64) (EntryMeta, error)
+	GetLogEntryMetaAtIndex(index uint64) (EntryMeta, error)
+	GetLogEntryAtIndex(index uint64) (Entry, error)
 	TruncateFromIndex(index uint64) error
 	GetCurrentLogEntry() EntryMeta
 }
@@ -96,6 +99,8 @@ type raftLog struct {
 	logIndex    uint64
 }
 
+
+
 func (rl *raftLog) GetCurrentLogEntry() EntryMeta {
 	return EntryMeta{
 		Index:       rl.logIndex,
@@ -103,7 +108,7 @@ func (rl *raftLog) GetCurrentLogEntry() EntryMeta {
 	}
 }
 
-func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
+func (rl *raftLog) GetLogEntryMetaAtIndex(index uint64) (EntryMeta, error) {
 	rl.RLock()
 	defer rl.RUnlock()
 	metadataBytes := make([]byte, metadataLengthInBytes)
@@ -120,6 +125,30 @@ func (rl *raftLog) GetLogEntryAtIndex(index uint64) (EntryMeta, error) {
 		Index:       index,
 		Term:        logTerm,
 		//PayloadSize: logPayloadSize,
+	}, nil
+}
+
+func (rl *raftLog) GetLogEntryAtIndex(index uint64) (Entry, error) {
+	rl.RLock()
+	defer rl.RUnlock()
+	metadataBytes := make([]byte, metadataLengthInBytes)
+	offset := (index - 1) * metadataLengthInBytes
+	_, err := rl.idxFile.ReadAt(metadataBytes, int64(offset))
+	if err != nil {
+		return Entry{}, err
+	}
+	logPosition, logTerm, logEntrySize := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes : recordLengthInBytes+8]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes+8 : recordLengthInBytes+16])
+	payloadBytes := make([]byte, logEntrySize)
+	_, err = rl.logFile.ReadAt(payloadBytes, int64(logPosition))
+	if err != nil {
+		return Entry{}, err
+	}
+	return Entry{
+		Index:   index,
+		Term:    logTerm,
+		Payload: payloadBytes,
 	}, nil
 }
 

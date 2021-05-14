@@ -182,11 +182,8 @@ func (rs *raftServer) clientCommand(payload []byte) (ResponseChan, ErrorChan) {
 
 type extractPayloadFn func(payload []byte) (interface{}, error)
 
-type toRaftRpcRequestFn func(
-	payload interface{},
-	aeRespChan chan raftrpc.RaftRpcResponse,
-	errChan chan error,
-) raftrpc.RaftRpcRequest
+type toRaftRpcRequestFn func(payload interface{}, aeRespChan chan raftrpc.RaftRpcResponse,
+	errChan chan error) raftrpc.RaftRpcRequest
 
 type receiveFn func(raftrpc.RaftRpcRequest)
 

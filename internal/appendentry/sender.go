@@ -1,6 +1,7 @@
 package appendentry
 
 import (
+	raftlog "github.com/kitengo/raft/internal/log"
 	"github.com/kitengo/raft/internal/models"
 	client "github.com/kitengo/raft/internal/sender"
 	"log"
@@ -34,15 +35,15 @@ type Sender interface {
 	ForwardEntry(entry Entry)
 }
 
-func NewSender() Sender {
+func NewSender(raftLog raftlog.RaftLog) Sender {
 	bufferChan := make(chan Entry, 100)
-	go senderSiphon(bufferChan)
+	go senderSiphon(raftLog, bufferChan)
 	return &sender{
 		bufferChan: bufferChan,
 	}
 }
 
-func senderSiphon(bufferChan chan Entry) {
+func senderSiphon(raftLog raftlog.RaftLog, bufferChan chan Entry) {
 	for entry := range bufferChan {
 		entry := entry
 		go func() {
@@ -73,6 +74,28 @@ func senderSiphon(bufferChan chan Entry) {
 			err = aeResp.FromPayload(resp.Payload)
 			if err != nil {
 				log.Printf("Unable to decode AppendEntry response, retrying")
+				return
+			}
+			if !aeResp.Success {
+				//Append failed, decrement the index and retry
+				nextIndex := entry.PrevLogIndex - 1
+				nextEntry, err := raftLog.GetLogEntryAtIndex(nextIndex)
+				if err != nil {
+					log.Printf("Unable to AppendEntry after decrementing index, retrying")
+					return
+				}
+				modifiedEntry := Entry{
+					MemberID:     entry.MemberID,
+					RespChan:     entry.RespChan,
+					Term:         entry.Term,
+					LeaderID:     entry.LeaderID,
+					PrevLogIndex: nextEntry.Index,
+					PrevLogTerm:  int64(nextEntry.Term),
+					Entries:      nextEntry.Payload,
+					LeaderCommit: entry.LeaderCommit,
+					MemberAddr:   entry.MemberAddr,
+				}
+				bufferChan <- modifiedEntry
 				return
 			}
 			entry.RespChan <- aeResp
