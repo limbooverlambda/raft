@@ -14,11 +14,11 @@ type RaftSupervisor interface {
 
 func NewRaftSupervisor(locator svclocator.ServiceLocator) RaftSupervisor {
 	return &raftSupervisor{
-		raftState:         locator.GetRaftState(),
-		followerProvider:  &followerProvider{
+		raftState: locator.GetRaftState(),
+		followerProvider: &followerProvider{
 			locator,
 		},
-		leaderProvider:    &leaderProvider{
+		leaderProvider: &leaderProvider{
 			locator,
 		},
 		candidateProvider: &candidateProvider{locator},
@@ -33,7 +33,7 @@ type raftSupervisor struct {
 }
 
 func (rs *raftSupervisor) Start() {
-	loop:
+loop:
 	for {
 		select {
 		case state := <-rs.raftState.GetStateChan():

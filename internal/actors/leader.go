@@ -116,7 +116,7 @@ type LeaderProvider interface {
 	Provide() Leader
 }
 
-type leaderProvider struct{
+type leaderProvider struct {
 	svclocator.ServiceLocator
 }
 
@@ -132,5 +132,3 @@ func (lp *leaderProvider) Provide() Leader {
 		raftTimer: lp.GetRaftTimer(),
 	}
 }
-
-

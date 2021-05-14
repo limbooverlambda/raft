@@ -10,7 +10,7 @@ const (
 )
 
 type RaftState interface {
-	GetStateChan() <- chan State
+	GetStateChan() <-chan State
 	SetState(state State)
 }
 
@@ -19,20 +19,18 @@ type raftState struct {
 }
 
 func NewRaftState() RaftState {
-    stateChan :=  make(chan State, 1)
+	stateChan := make(chan State, 1)
 	//Seed the FollowerState
-    stateChan <- FollowerState
-    return &raftState{
+	stateChan <- FollowerState
+	return &raftState{
 		stateChan: stateChan,
 	}
 }
 
-func (rs *raftState) GetStateChan() <- chan State {
+func (rs *raftState) GetStateChan() <-chan State {
 	return rs.stateChan
 }
 
 func (rs *raftState) SetState(state State) {
 	rs.stateChan <- state
 }
-
-

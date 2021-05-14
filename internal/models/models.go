@@ -69,7 +69,7 @@ func (aer *AppendEntryResponse) FromPayload(payload []byte) error {
 }
 
 type RequestVoteResponse struct {
-	Term int64
+	Term        int64
 	VoteGranted bool
 }
 
@@ -78,8 +78,6 @@ func (rvr *RequestVoteResponse) FromPayload(payload []byte) error {
 	return decoder.Decode(rvr)
 }
 
-
-
 type Response struct {
 	Payload []byte
 }
@@ -87,11 +85,11 @@ type Response struct {
 func toRequestPayload(requestType RequestType, payload interface{}) (Request, error) {
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
-	if err := encoder.Encode(payload);err != nil {
+	if err := encoder.Encode(payload); err != nil {
 		return Request{}, err
 	}
 	return Request{
 		RequestType: requestType,
-		Payload:    buffer.Bytes(),
+		Payload:     buffer.Bytes(),
 	}, nil
 }

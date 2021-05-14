@@ -26,7 +26,7 @@ func main() {
 
 	//Initializing the RaftSupervisor
 	raftSupervisor := actors.NewRaftSupervisor(svcLocator)
-	go func() {raftSupervisor.Start()}()
+	go func() { raftSupervisor.Start() }()
 
 	//Initializing the raft server
 	raftServer := server.NewRaftServer(svcLocator.GetRpcLocator())

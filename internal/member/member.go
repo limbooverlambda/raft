@@ -5,7 +5,7 @@ import (
 )
 
 type Entry struct {
-	ID string
+	ID      string
 	Address string
 }
 
@@ -37,5 +37,5 @@ func (rm *raftMember) Leader() Entry {
 
 func (rm *raftMember) List() ([]Entry, error) {
 	log.Println("Listing the members of the cluster")
-	return []Entry{{ID:"id1"},{ID:"id2"}, {ID:"id3"}}, nil
+	return []Entry{{ID: "id1"}, {ID: "id2"}, {ID: "id3"}}, nil
 }

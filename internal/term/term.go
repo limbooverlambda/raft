@@ -13,7 +13,7 @@ func NewRaftTerm() RaftTerm {
 	return &raftTerm{}
 }
 
-type raftTerm struct{
+type raftTerm struct {
 	sync.RWMutex
 	term int64
 }

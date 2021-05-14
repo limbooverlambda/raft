@@ -24,11 +24,10 @@ type EntryMeta struct {
 }
 
 type Entry struct {
-	Index uint64
+	Index   uint64
 	Term    uint64
 	Payload []byte
 }
-
 
 type AppendEntryResponse struct {
 	Term         int64
@@ -99,12 +98,10 @@ type raftLog struct {
 	logIndex    uint64
 }
 
-
-
 func (rl *raftLog) GetCurrentLogEntry() EntryMeta {
 	return EntryMeta{
-		Index:       rl.logIndex,
-		Term:        rl.logTerm,
+		Index: rl.logIndex,
+		Term:  rl.logTerm,
 	}
 }
 
@@ -118,12 +115,12 @@ func (rl *raftLog) GetLogEntryMetaAtIndex(index uint64) (EntryMeta, error) {
 		return EntryMeta{}, err
 	}
 	_, logTerm, _ := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
-		byteorder.Uint64(metadataBytes[recordLengthInBytes : recordLengthInBytes+8]),
-		byteorder.Uint64(metadataBytes[recordLengthInBytes+8 : recordLengthInBytes+16])
+		byteorder.Uint64(metadataBytes[recordLengthInBytes:recordLengthInBytes+8]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes+8:recordLengthInBytes+16])
 
 	return EntryMeta{
-		Index:       index,
-		Term:        logTerm,
+		Index: index,
+		Term:  logTerm,
 		//PayloadSize: logPayloadSize,
 	}, nil
 }
@@ -138,8 +135,8 @@ func (rl *raftLog) GetLogEntryAtIndex(index uint64) (Entry, error) {
 		return Entry{}, err
 	}
 	logPosition, logTerm, logEntrySize := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
-		byteorder.Uint64(metadataBytes[recordLengthInBytes : recordLengthInBytes+8]),
-		byteorder.Uint64(metadataBytes[recordLengthInBytes+8 : recordLengthInBytes+16])
+		byteorder.Uint64(metadataBytes[recordLengthInBytes:recordLengthInBytes+8]),
+		byteorder.Uint64(metadataBytes[recordLengthInBytes+8:recordLengthInBytes+16])
 	payloadBytes := make([]byte, logEntrySize)
 	_, err = rl.logFile.ReadAt(payloadBytes, int64(logPosition))
 	if err != nil {
@@ -155,7 +152,7 @@ func (rl *raftLog) GetLogEntryAtIndex(index uint64) (Entry, error) {
 func (rl *raftLog) TruncateFromIndex(index uint64) error {
 	rl.Lock()
 	defer rl.Unlock()
-	idxTruncationSize := rl.idxSize - (index - 1) * metadataLengthInBytes
+	idxTruncationSize := rl.idxSize - (index-1)*metadataLengthInBytes
 	if err := rl.idxFile.Truncate(int64(idxTruncationSize)); err != nil {
 		return err
 	}
