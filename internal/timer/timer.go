@@ -14,21 +14,21 @@ type RaftTimer interface {
 	GetIdleTimeout() time.Time
 }
 
-func NewRaftTimer() RaftTimer  {
+func NewRaftTimer() RaftTimer {
 	deadlineTick := time.Now()
 	return &raftTimer{
 		deadlineTick: deadlineTick,
 	}
 }
 
-type raftTimer struct{
+type raftTimer struct {
 	deadlineTick time.Time
-	idleTick time.Time
+	idleTick     time.Time
 }
 
 func (rt *raftTimer) SetDeadline(currentTime time.Time) {
 	rand.Seed(time.Now().UnixNano())
-	rDelta := rand.Intn(rconfig.MaxPacketDelayMs - rconfig.MinPacketDelayMs) + rconfig.MinPacketDelayMs
+	rDelta := rand.Intn(rconfig.MaxPacketDelayMs-rconfig.MinPacketDelayMs) + rconfig.MinPacketDelayMs
 	rt.deadlineTick = currentTime.Add(time.Duration(rDelta) * time.Millisecond)
 }
 
@@ -43,5 +43,3 @@ func (rt *raftTimer) SetIdleTimeout() {
 func (rt *raftTimer) GetIdleTimeout() time.Time {
 	return rt.deadlineTick
 }
-
-

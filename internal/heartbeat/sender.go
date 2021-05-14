@@ -31,10 +31,10 @@ func NewRaftHeartbeat(raftTerm raftterm.RaftTerm,
 	}
 }
 
-type raftHeartbeat struct{
+type raftHeartbeat struct {
 	raftMember raftmember.RaftMember
-	raftTerm raftterm.RaftTerm
-	raftIndex *raftstate.RaftIndex
+	raftTerm   raftterm.RaftTerm
+	raftIndex  *raftstate.RaftIndex
 }
 
 func (rhb *raftHeartbeat) SendHeartbeats() {

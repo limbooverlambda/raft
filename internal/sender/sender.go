@@ -46,4 +46,3 @@ func SendCommand(requestConv raftmodels.RequestConverter, ipAddress string) (res
 	response = <-recvChan
 	return
 }
-

@@ -12,9 +12,8 @@ var rootCmd = &cobra.Command{
 	Short: "An executable to execise the raft APIs",
 }
 
-
 var clientCmd = &cobra.Command{
-	Use: "clientcmd",
+	Use:   "clientcmd",
 	Short: "Send client requests to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip, _ := cmd.Flags().GetString("ip")
@@ -24,12 +23,12 @@ var clientCmd = &cobra.Command{
 		clientCommand := &raftmodels.ClientCommandPayload{
 			ClientCommand: []byte(payload),
 		}
-		raftsender.SendCommand(clientCommand,ip)
+		raftsender.SendCommand(clientCommand, ip)
 	},
 }
 
 var appendEntryCmd = &cobra.Command{
-	Use: "aecmd",
+	Use:   "aecmd",
 	Short: "Send append entry requests to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip, _ := cmd.Flags().GetString("ip")
@@ -53,7 +52,7 @@ var appendEntryCmd = &cobra.Command{
 }
 
 var requestVoteCmd = &cobra.Command{
-	Use: "votecmd",
+	Use:   "votecmd",
 	Short: "Send request Vote to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
 		ip, _ := cmd.Flags().GetString("ip")
@@ -72,24 +71,23 @@ var requestVoteCmd = &cobra.Command{
 	},
 }
 
-
 func main() {
-	clientCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
-	clientCmd.Flags().StringP("payload","", "","string payload to send to the raft server")
+	clientCmd.Flags().StringP("ip", "", "127.0.0.1:4546", "server to send client requests to")
+	clientCmd.Flags().StringP("payload", "", "", "string payload to send to the raft server")
 
-	appendEntryCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
-	appendEntryCmd.Flags().StringP("entries","", "","string payload to append to the raft server")
-	appendEntryCmd.Flags().StringP("leaderid","", "","leader id for the append entry")
-	appendEntryCmd.Flags().Int64P("prevlogindex","", 0,"prev log index for the append entry")
-	appendEntryCmd.Flags().Int64P("prevlogterm","", 0,"prev log term for the append entry")
-	appendEntryCmd.Flags().Int64P("leadercommit","", 0,"leader commit for the append entry")
-	appendEntryCmd.Flags().Int64P("term","", 0,"term for the append entry")
+	appendEntryCmd.Flags().StringP("ip", "", "127.0.0.1:4546", "server to send client requests to")
+	appendEntryCmd.Flags().StringP("entries", "", "", "string payload to append to the raft server")
+	appendEntryCmd.Flags().StringP("leaderid", "", "", "leader id for the append entry")
+	appendEntryCmd.Flags().Int64P("prevlogindex", "", 0, "prev log index for the append entry")
+	appendEntryCmd.Flags().Int64P("prevlogterm", "", 0, "prev log term for the append entry")
+	appendEntryCmd.Flags().Int64P("leadercommit", "", 0, "leader commit for the append entry")
+	appendEntryCmd.Flags().Int64P("term", "", 0, "term for the append entry")
 
-	requestVoteCmd.Flags().StringP("ip","","127.0.0.1:4546", "server to send client requests to")
-	requestVoteCmd.Flags().StringP("candidateid","", "","candidate id for the request vote")
-	requestVoteCmd.Flags().Int64P("lastlogindex","", 0,"last log index for the request vote")
-	requestVoteCmd.Flags().Int64P("lastlogterm","", 0,"last log term for the request vote")
-	requestVoteCmd.Flags().Int64P("term","", 0,"term for the request vote")
+	requestVoteCmd.Flags().StringP("ip", "", "127.0.0.1:4546", "server to send client requests to")
+	requestVoteCmd.Flags().StringP("candidateid", "", "", "candidate id for the request vote")
+	requestVoteCmd.Flags().Int64P("lastlogindex", "", 0, "last log index for the request vote")
+	requestVoteCmd.Flags().Int64P("lastlogterm", "", 0, "last log term for the request vote")
+	requestVoteCmd.Flags().Int64P("term", "", 0, "term for the request vote")
 
 	rootCmd.AddCommand(clientCmd)
 	rootCmd.AddCommand(appendEntryCmd)
@@ -97,6 +95,3 @@ func main() {
 
 	rootCmd.Execute()
 }
-
-
-
