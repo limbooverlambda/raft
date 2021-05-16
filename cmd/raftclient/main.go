@@ -9,7 +9,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "raftclient",
-	Short: "An executable to execise the raft APIs",
+	Short: "An executable to exercise the raft APIs",
 }
 
 var clientCmd = &cobra.Command{
