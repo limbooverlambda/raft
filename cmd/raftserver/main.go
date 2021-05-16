@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"fmt"
+	"github.com/spf13/cobra"
 	"log"
 	"net"
 
@@ -12,14 +13,47 @@ import (
 	"github.com/kitengo/raft/internal/server"
 )
 
-//TODO: Add the peer logic
-//TODO: Create the sender stubs that will be used by both the raftclient as well as the server
-//TODO: Move the models that will be used by server and client to pkg.
-//TODO: Add the gob serialization and de-serialization logic
-//TODO: Add the transport to receive the TCP requests and its to the appropriate channels
 //TODO: Start the committer thread
+var rootCmd = &cobra.Command{
+	Use:   "raftserver",
+	Short: "Raft server binary",
+}
+
+var serverStartupCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Starts the raft server",
+	Run: func(cmd *cobra.Command, args []string) {
+		peers, _ := cmd.Flags().GetStringSlice("peers")
+		port, _ := cmd.Flags().GetInt16("port")
+		name, _ := cmd.Flags().GetString("name")
+		log.Println("Peers", peers)
+		log.Println("port", port)
+		log.Println("name", name)
+	},
+}
 
 func main() {
+	var peers []string
+	var defaultPeers []string
+	serverStartupCmd.Flags().StringSliceVarP(&peers, "peers", "p",
+		defaultPeers, "--peers <peer1> --peers <peer2> ...")
+
+	var port int16
+	defaultPort := int16(8326)
+	serverStartupCmd.Flags().Int16VarP(&port, "port", "r",
+		defaultPort, "--port <port number of the server>")
+
+	var name string
+	//Randomize the default name
+	defaultName := "node"
+	serverStartupCmd.Flags().StringVarP(&name, "name", "n",
+		defaultName, "--name <name of the server>")
+
+	rootCmd.AddCommand(serverStartupCmd)
+	rootCmd.Execute()
+}
+
+func startServer() {
 	fmt.Println("Starting raft...")
 	//Initializing the service locator
 	svcLocator := locator.NewServiceLocator()
