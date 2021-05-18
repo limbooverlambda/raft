@@ -6,6 +6,7 @@ import (
 	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
 	raftlog "github.com/kitengo/raft/internal/log"
 	raftmember "github.com/kitengo/raft/internal/member"
+	"github.com/kitengo/raft/internal/rconfig"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftterm "github.com/kitengo/raft/internal/term"
@@ -22,9 +23,9 @@ type ServiceLocator interface {
 	GetRaftHeartbeat() raftheartbeat.RaftHeartbeat
 }
 
-func NewServiceLocator() ServiceLocator {
+func NewServiceLocator(config rconfig.Config) ServiceLocator {
 	raftTerm := raftterm.NewRaftTerm()
-	raftMember := raftmember.NewRaftMember()
+	raftMember := raftmember.NewRaftMember(config)
 	index := raftstate.NewRaftIndex()
 	raftLog := raftlog.NewRaftLog("log")
 	return &serviceLocator{
