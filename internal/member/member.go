@@ -6,7 +6,6 @@ import (
 	"sync"
 )
 
-
 type EntryType int
 
 const (
@@ -46,16 +45,16 @@ func NewRaftMember(config rconfig.Config) RaftMember {
 	memberMap.Store(Self, self)
 	memberMap.Store(Members, memberEntries)
 	return &raftMember{
-		memberMap,
+		&memberMap,
 	}
 }
 
-type raftMember struct{
-	sync.Map
+type raftMember struct {
+	*sync.Map
 }
 
 func (rm *raftMember) Self() Entry {
-	s, ok :=  rm.Load(Self)
+	s, ok := rm.Load(Self)
 	if !ok {
 		panic("failed to find self")
 	}
@@ -63,7 +62,7 @@ func (rm *raftMember) Self() Entry {
 }
 
 func (rm *raftMember) Leader() Entry {
-	s, ok :=  rm.Load(Leader)
+	s, ok := rm.Load(Leader)
 	if !ok {
 		panic("failed to find self")
 	}
