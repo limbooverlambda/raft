@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/gob"
 	"fmt"
+	"github.com/kitengo/raft/internal/rconfig"
 	"github.com/spf13/cobra"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/kitengo/raft/internal/actors"
 	"github.com/kitengo/raft/internal/locator"
@@ -24,23 +26,41 @@ var serverStartupCmd = &cobra.Command{
 	Short: "Starts the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
 		peers, _ := cmd.Flags().GetStringSlice("peers")
-		port, _ := cmd.Flags().GetInt16("port")
+		port, _ := cmd.Flags().GetString("port")
 		name, _ := cmd.Flags().GetString("name")
-		log.Println("Peers", peers)
-		log.Println("port", port)
-		log.Println("name", name)
+
+		config := rconfig.Config{
+			ServerID:     name,
+			ServerPort:   port,
+			MemberConfig: toMemberConfig(peers),
+		}
+		startServer(config)
 	},
+}
+
+func toMemberConfig(peers []string) []rconfig.MemberConfig {
+	var members []rconfig.MemberConfig
+	for _, peer := range peers {
+		tokens := strings.Split(peer, ":")
+		mConfig := rconfig.MemberConfig{
+			ID:   tokens[0],
+			IP:   tokens[1],
+			Port: tokens[2],
+		}
+		members = append(members, mConfig)
+	}
+	return members
 }
 
 func main() {
 	var peers []string
 	var defaultPeers []string
 	serverStartupCmd.Flags().StringSliceVarP(&peers, "peers", "p",
-		defaultPeers, "--peers <peer1> --peers <peer2> ...")
+		defaultPeers, "--peers <name:ip:port> --peers <name:ip:port> ...")
 
-	var port int16
-	defaultPort := int16(8326)
-	serverStartupCmd.Flags().Int16VarP(&port, "port", "r",
+	var port string
+	defaultPort := "4546"
+	serverStartupCmd.Flags().StringVarP(&port, "port", "r",
 		defaultPort, "--port <port number of the server>")
 
 	var name string
@@ -53,10 +73,10 @@ func main() {
 	rootCmd.Execute()
 }
 
-func startServer() {
+func startServer(config rconfig.Config) {
 	fmt.Println("Starting raft...")
 	//Initializing the service locator
-	svcLocator := locator.NewServiceLocator()
+	svcLocator := locator.NewServiceLocator(config)
 
 	//Initializing the RaftSupervisor
 	raftSupervisor := actors.NewRaftSupervisor(svcLocator)
