@@ -64,7 +64,7 @@ func (rm *raftMember) Self() Entry {
 func (rm *raftMember) Leader() Entry {
 	s, ok := rm.Load(Leader)
 	if !ok {
-		panic("failed to find self")
+		panic("failed to find leader")
 	}
 	return s.(Entry)
 }
