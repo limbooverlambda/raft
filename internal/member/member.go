@@ -25,6 +25,7 @@ type RaftMember interface {
 	List() ([]Entry, error)
 	Leader() Entry
 	Self() Entry
+	SetSelfToLeader()
 }
 
 func NewRaftMember(config rconfig.Config) RaftMember {
@@ -53,6 +54,10 @@ func NewRaftMember(config rconfig.Config) RaftMember {
 
 type raftMember struct {
 	*sync.Map
+}
+
+func (rm *raftMember) SetSelfToLeader() {
+	rm.Store(Leader, rm.Self())
 }
 
 func (rm *raftMember) Self() Entry {

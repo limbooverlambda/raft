@@ -192,8 +192,12 @@ func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
 	}
 	votedFor := rrV.votedFor
-	if (votedFor == "" || votedFor == requestVoteMeta.CandidateId) &&
-		rrV.isLogUptoDate(requestVoteMeta) {
+	log.Println("votedFor", votedFor)
+	isLogUptoDate := rrV.isLogUptoDate(requestVoteMeta)
+	log.Println("isLogUptoDate", isLogUptoDate)
+	didIVote := votedFor == "" || votedFor == requestVoteMeta.CandidateId
+	log.Println("didIVote", didIVote)
+	if didIVote && isLogUptoDate {
 		log.Printf("Accepting the vote from %+v\n", requestVoteMeta)
 		rrV.votedFor = requestVoteMeta.CandidateId
 		return RequestVoteResponse{
@@ -226,7 +230,7 @@ func (rrV raftRequestVote) isLogUptoDate(meta RequestVoteMeta) bool {
 		return true
 	}
 	if currentTerm == meta.LastLogTerm {
-		return meta.LastLogIndex > currentIndex
+		return meta.LastLogIndex >= currentIndex
 	}
 	return false
 }
@@ -329,6 +333,7 @@ func (rcc *raftClientCommand) Process(meta RaftRpcMeta) (RaftRpcResponse, error)
 			Entries:      payload,
 			LeaderCommit: rcc.raftIndex.GetCommitOffset(),
 			MemberAddr:   m.Address,
+			MemberPort: m.Port,
 		}
 		rcc.appendEntrySender.ForwardEntry(entry)
 	}

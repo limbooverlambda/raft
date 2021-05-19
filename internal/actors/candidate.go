@@ -53,9 +53,11 @@ func (c *candidate) Run() {
 			{
 				var state raftstate.State
 				if vs == raftvoter.Follower {
+					log.Println("flipping over to be a follower")
 					state = raftstate.FollowerState
 				}
 				if vs == raftvoter.Leader {
+					log.Println("flipping over to be a leader")
 					state = raftstate.LeaderState
 				}
 				c.state.SetState(state)

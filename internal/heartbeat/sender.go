@@ -72,7 +72,7 @@ func (rhb *raftHeartbeat) sendHeartbeat(wg *sync.WaitGroup, member raftmember.En
 		LeaderId:     payload.LeaderID,
 		LeaderCommit: payload.LeaderCommit,
 	}
-	resp, err := client.SendCommand(&aePayload, member.Address)
+	resp, err := client.SendCommand(&aePayload, member.Address, member.Port)
 	if err != nil {
 		//Requeue the entry back into the buffer channel
 		log.Printf("Unable to send AppendEntry request %v\n", err)

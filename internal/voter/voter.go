@@ -1,7 +1,6 @@
 package voter
 
 import (
-	"fmt"
 	raftlog "github.com/kitengo/raft/internal/log"
 	raftmember "github.com/kitengo/raft/internal/member"
 	raftmodels "github.com/kitengo/raft/internal/models"
@@ -63,7 +62,7 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 		defer close(errorChan)
 		defer close(voteResponseChan)
 		//Vote for itself
-		voteCount := 1
+		voteCount := 0
 		majorityCount := (len(members) >> 1) + 1
 		for _, member := range members {
 			go rv.requestVote(member, requestVotePayload, voteResponseChan, errorChan)
@@ -72,6 +71,9 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 			select {
 			case vr := <-voteResponseChan:
 				{
+					log.Println("VoteCount", voteCount)
+					log.Println("MajorityCount", majorityCount)
+					log.Printf("VoteRespose %+v\n", vr)
 					if vr.Term > rv.raftTerm.GetTerm() {
 						voteStatusChan <- Follower
 						return
@@ -79,7 +81,8 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 					if vr.VoteGranted {
 						voteCount++
 					}
-					if voteCount > majorityCount {
+					if voteCount >= majorityCount {
+						rv.raftMember.SetSelfToLeader()
 						voteStatusChan <- Leader
 						return
 					}
@@ -98,8 +101,7 @@ func (rv *raftVoter) requestVote(member raftmember.Entry,
 	payload raftmodels.RequestVotePayload,
 	responseChan chan raftmodels.RequestVoteResponse,
 	errChan chan error) {
-	address := fmt.Sprintf("%s:%s", member.Address, member.Port)
-	resp, err := sender.SendCommand(&payload, address)
+	resp, err := sender.SendCommand(&payload, member.Address, member.Port)
 	if err != nil {
 		log.Println("unable to send vote request due to", err)
 		errChan <- err
