@@ -1,6 +1,7 @@
 package voter
 
 import (
+	"fmt"
 	raftlog "github.com/kitengo/raft/internal/log"
 	raftmember "github.com/kitengo/raft/internal/member"
 	raftmodels "github.com/kitengo/raft/internal/models"
@@ -38,6 +39,7 @@ type raftVoter struct {
 }
 
 func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
+	log.Println("Requesting vote for term", term)
 	voteStatusChan := make(chan VoteStatus, 1)
 	candidateID := rv.raftMember.Self().ID
 	lastLogEntryMeta := rv.raftLog.GetCurrentLogEntry()
@@ -60,7 +62,8 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 		defer close(voteStatusChan)
 		defer close(errorChan)
 		defer close(voteResponseChan)
-		var voteCount int
+		//Vote for itself
+		voteCount := 1
 		majorityCount := (len(members) >> 1) + 1
 		for _, member := range members {
 			go rv.requestVote(member, requestVotePayload, voteResponseChan, errorChan)
@@ -83,7 +86,7 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 				}
 			case err := <-errorChan:
 				{
-					log.Println("failed to recieve vote", err)
+					log.Println("failed to receive vote", err)
 				}
 			}
 		}
@@ -95,9 +98,12 @@ func (rv *raftVoter) requestVote(member raftmember.Entry,
 	payload raftmodels.RequestVotePayload,
 	responseChan chan raftmodels.RequestVoteResponse,
 	errChan chan error) {
-	resp, err := sender.SendCommand(&payload, member.Address)
+	address := fmt.Sprintf("%s:%s", member.Address, member.Port)
+	resp, err := sender.SendCommand(&payload, address)
 	if err != nil {
 		log.Println("unable to send vote request due to", err)
+		errChan <- err
+		return
 	}
 	var vrResp raftmodels.RequestVoteResponse
 	err = vrResp.FromPayload(resp.Payload)

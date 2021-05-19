@@ -60,7 +60,6 @@ func (c *candidate) Run() {
 				}
 				c.state.SetState(state)
 				return
-
 			}
 		case aeReq := <-aeReqChan:
 			{
@@ -104,6 +103,7 @@ func (c *candidate) Run() {
 			if tick.After(c.raftTimer.GetDeadline()) {
 				term = c.term.IncrementTerm()
 				reqVoteChan = c.voter.RequestVote(term)
+				c.raftTimer.SetDeadline(time.Now())
 			}
 		}
 	}

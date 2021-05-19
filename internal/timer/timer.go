@@ -28,7 +28,7 @@ type raftTimer struct {
 
 func (rt *raftTimer) SetDeadline(currentTime time.Time) {
 	rand.Seed(time.Now().UnixNano())
-	rDelta := rand.Intn(rconfig.MaxPacketDelayMs-rconfig.MinPacketDelayMs) + rconfig.MinPacketDelayMs
+	rDelta := rand.Int31n(rconfig.MaxPacketDelayMs-rconfig.MinPacketDelayMs) + rconfig.MinPacketDelayMs
 	rt.deadlineTick = currentTime.Add(time.Duration(rDelta) * time.Millisecond)
 }
 

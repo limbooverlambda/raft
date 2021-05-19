@@ -182,15 +182,19 @@ Process
       least as up-to-date as receiver’s log, grant vote (§5.2, §5.4)
 */
 func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
-	log.Println("Received request vote", meta)
-	requestVoteMeta := meta.(RequestVoteMeta)
+	requestVoteMeta, ok := meta.(RequestVoteMeta)
+	if !ok {
+		return RequestVoteResponse{}, errors.New("failed to receive request vote")
+	}
 	currentTerm := rrV.raftTerm.GetTerm()
 	if requestVoteMeta.Term < currentTerm {
+		log.Println("Current term is greater than incoming term, rejecting vote request")
 		return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
 	}
 	votedFor := rrV.votedFor
 	if (votedFor == "" || votedFor == requestVoteMeta.CandidateId) &&
 		rrV.isLogUptoDate(requestVoteMeta) {
+		log.Printf("Accepting the vote from %+v\n", requestVoteMeta)
 		rrV.votedFor = requestVoteMeta.CandidateId
 		return RequestVoteResponse{
 			Term:        requestVoteMeta.Term,

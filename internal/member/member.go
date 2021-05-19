@@ -3,6 +3,7 @@ package member
 import (
 	"errors"
 	"github.com/kitengo/raft/internal/rconfig"
+	"log"
 	"sync"
 )
 
@@ -40,6 +41,7 @@ func NewRaftMember(config rconfig.Config) RaftMember {
 			Address: mc.IP,
 			Port:    mc.Port,
 		}
+		log.Printf("member entry %+v\n", entry)
 		memberEntries = append(memberEntries, entry)
 	}
 	memberMap.Store(Self, self)

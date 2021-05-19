@@ -41,7 +41,7 @@ func SendCommand(requestConv raftmodels.RequestConverter, ipAddress string) (res
 			err = fmt.Errorf("unable to decode response %v", err)
 			return
 		}
-		log.Printf("Got response %v\n", string(resp.Payload))
+		recvChan <- resp
 	}()
 	response = <-recvChan
 	return
