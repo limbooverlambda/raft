@@ -9,6 +9,7 @@ import (
 	"log"
 )
 
+//go:generate stringer -type=VoteStatus
 type VoteStatus int
 
 const (
@@ -62,7 +63,9 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 		defer close(errorChan)
 		defer close(voteResponseChan)
 		//Vote for itself
-		voteCount := 0
+		voteCount := 1
+		rv.raftMember.SetVotedFor(candidateID)
+
 		majorityCount := (len(members) >> 1) + 1
 		for _, member := range members {
 			go rv.requestVote(member, requestVotePayload, voteResponseChan, errorChan)
@@ -71,9 +74,6 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 			select {
 			case vr := <-voteResponseChan:
 				{
-					log.Println("VoteCount", voteCount)
-					log.Println("MajorityCount", majorityCount)
-					log.Printf("VoteRespose %+v\n", vr)
 					if vr.Term > rv.raftTerm.GetTerm() {
 						voteStatusChan <- Follower
 						return
@@ -81,7 +81,7 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 					if vr.VoteGranted {
 						voteCount++
 					}
-					if voteCount >= majorityCount {
+					if voteCount > majorityCount {
 						rv.raftMember.SetSelfToLeader()
 						voteStatusChan <- Leader
 						return

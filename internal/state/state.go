@@ -1,5 +1,6 @@
 package state
 
+//go:generate stringer -type=State
 type State int
 
 const (

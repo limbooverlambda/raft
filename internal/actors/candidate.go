@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"github.com/kitengo/raft/internal/member"
 	"github.com/kitengo/raft/internal/models"
 	"log"
 	"time"
@@ -19,6 +20,7 @@ type Candidate interface {
 }
 
 type candidate struct {
+	member    member.RaftMember
 	state     raftstate.RaftState
 	term      raftterm.RaftTerm
 	voter     raftvoter.RaftVoter
@@ -51,6 +53,7 @@ func (c *candidate) Run() {
 		select {
 		case vs := <-reqVoteChan:
 			{
+				log.Println("Vote state is", vs)
 				var state raftstate.State
 				if vs == raftvoter.Follower {
 					log.Println("flipping over to be a follower")
@@ -58,6 +61,7 @@ func (c *candidate) Run() {
 				}
 				if vs == raftvoter.Leader {
 					log.Println("flipping over to be a leader")
+					c.member.SetLeaderID(c.member.Self().ID)
 					state = raftstate.LeaderState
 				}
 				c.state.SetState(state)
@@ -82,6 +86,11 @@ func (c *candidate) Run() {
 				//reset the deadline
 				aeResp := resp.(models.AppendEntryResponse)
 				if aeResp.Term > term {
+					c.state.SetState(raftstate.FollowerState)
+					return
+				}
+				if aer.LeaderId != "" {
+					c.member.SetLeaderID(aer.LeaderId)
 					c.state.SetState(raftstate.FollowerState)
 					return
 				}
@@ -127,6 +136,7 @@ func (cp *candidateProvider) Provide() Candidate {
 		term:      cp.GetRaftTerm(),
 		voter:     cp.GetRaftVoter(),
 		raftTimer: cp.GetRaftTimer(),
+		member:    cp.GetRaftMember(),
 		aeRPC:     rpcLocator.GetAppendEntrySvc(),
 		voteRPC:   rpcLocator.GetRequestVoteSvc(),
 	}

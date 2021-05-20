@@ -66,7 +66,6 @@ func (rhb *raftHeartbeat) SendHeartbeats() {
 
 func (rhb *raftHeartbeat) sendHeartbeat(wg *sync.WaitGroup, member raftmember.Entry, payload *Payload) {
 	defer wg.Done()
-	log.Printf("Forwarding entry to peer %v\n", payload)
 	aePayload := raftmodels.AppendEntryPayload{
 		Term:         payload.Term,
 		LeaderId:     payload.LeaderID,
