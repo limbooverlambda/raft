@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"fmt"
 	appendentrysender "github.com/kitengo/raft/internal/appendentry"
 	raftapplicator "github.com/kitengo/raft/internal/applicator"
 	raftheartbeat "github.com/kitengo/raft/internal/heartbeat"
@@ -20,6 +21,7 @@ type ServiceLocator interface {
 	GetRaftTerm() raftterm.RaftTerm
 	GetRaftTimer() rafttimer.RaftTimer
 	GetRaftVoter() raftvoter.RaftVoter
+	GetRaftMember() raftmember.RaftMember
 	GetRaftHeartbeat() raftheartbeat.RaftHeartbeat
 }
 
@@ -27,12 +29,13 @@ func NewServiceLocator(config rconfig.Config) ServiceLocator {
 	raftTerm := raftterm.NewRaftTerm()
 	raftMember := raftmember.NewRaftMember(config)
 	index := raftstate.NewRaftIndex()
-	raftLog := raftlog.NewRaftLog("log")
+	raftLog := raftlog.NewRaftLog(fmt.Sprintf("log-%s", config.ServerID))
 	return &serviceLocator{
 		raftState:     raftstate.NewRaftState(),
 		raftTerm:      raftTerm,
 		raftVoter:     raftvoter.NewRaftVoter(raftMember, raftLog, raftTerm),
 		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(raftTerm, raftMember, index),
+		raftMember:    raftMember,
 		rpcLocator:    NewRpcLocator(raftTerm, raftMember, index, raftLog),
 	}
 }
@@ -42,7 +45,12 @@ type serviceLocator struct {
 	raftTerm      raftterm.RaftTerm
 	raftVoter     raftvoter.RaftVoter
 	raftHeartbeat raftheartbeat.RaftHeartbeat
+	raftMember    raftmember.RaftMember
 	rpcLocator    RpcLocator
+}
+
+func (sl *serviceLocator) GetRaftMember() raftmember.RaftMember {
+	return sl.raftMember
 }
 
 func (sl *serviceLocator) GetRaftVoter() raftvoter.RaftVoter {
@@ -84,8 +92,8 @@ func NewRpcLocator(term raftterm.RaftTerm,
 
 	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{
-		raftAppend:      raftrpc.NewRaftAppendEntry(),
-		raftRequestVote: raftrpc.NewRaftRequestVote(term, raftLog),
+		raftAppend:      raftrpc.NewRaftAppendEntry(term, raftLog, raftIndex),
+		raftRequestVote: raftrpc.NewRaftRequestVote(term, raftLog, raftMember),
 		raftClientCommand: raftrpc.NewRaftClientCommand(term,
 			raftLog,
 			raftMember,

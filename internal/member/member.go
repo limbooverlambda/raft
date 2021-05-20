@@ -3,6 +3,7 @@ package member
 import (
 	"errors"
 	"github.com/kitengo/raft/internal/rconfig"
+	"log"
 	"sync"
 )
 
@@ -12,6 +13,7 @@ const (
 	Self EntryType = iota
 	Leader
 	Members
+	VotedFor
 )
 
 type Entry struct {
@@ -24,6 +26,11 @@ type RaftMember interface {
 	List() ([]Entry, error)
 	Leader() Entry
 	Self() Entry
+	SetSelfToLeader()
+	SetLeaderID(leaderID string)
+	GetLeaderID() (leaderID string)
+	VotedFor() (candidateID string)
+	SetVotedFor(candidateID string)
 }
 
 func NewRaftMember(config rconfig.Config) RaftMember {
@@ -40,17 +47,44 @@ func NewRaftMember(config rconfig.Config) RaftMember {
 			Address: mc.IP,
 			Port:    mc.Port,
 		}
+		log.Printf("member entry %+v\n", entry)
 		memberEntries = append(memberEntries, entry)
 	}
 	memberMap.Store(Self, self)
 	memberMap.Store(Members, memberEntries)
+	memberMap.Store(VotedFor, "")
 	return &raftMember{
-		&memberMap,
+		Map: &memberMap,
 	}
 }
 
 type raftMember struct {
 	*sync.Map
+	leaderID string
+}
+
+func (rm *raftMember) GetLeaderID() (leaderID string) {
+	leaderID = rm.leaderID
+	return
+}
+
+func (rm *raftMember) SetLeaderID(leaderID string) {
+	rm.leaderID = leaderID
+}
+
+func (rm *raftMember) VotedFor() (candidateID string) {
+	if v, ok := rm.Load(VotedFor); ok {
+		candidateID = v.(string)
+	}
+	return
+}
+
+func (rm *raftMember) SetVotedFor(candidateID string) {
+	rm.Store(VotedFor, candidateID)
+}
+
+func (rm *raftMember) SetSelfToLeader() {
+	rm.Store(Leader, rm.Self())
 }
 
 func (rm *raftMember) Self() Entry {

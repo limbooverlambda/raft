@@ -27,6 +27,7 @@ type Entry struct {
 	Entries      []byte
 	LeaderCommit uint64
 	MemberAddr   string
+	MemberPort   string
 }
 
 //Sender
@@ -64,7 +65,7 @@ func senderSiphon(raftLog raftlog.RaftLog, bufferChan chan Entry) {
 				Entries:      entry.Entries,
 				LeaderCommit: entry.LeaderCommit,
 			}
-			resp, err := client.SendCommand(&aePayload, entry.MemberAddr)
+			resp, err := client.SendCommand(&aePayload, entry.MemberAddr, entry.MemberPort)
 			if err != nil {
 				//Requeue the entry back into the buffer channel
 				log.Printf("Unable to send AppendEntry request, retrying")

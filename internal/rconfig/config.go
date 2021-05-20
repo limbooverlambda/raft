@@ -5,9 +5,9 @@ import (
 )
 
 const PollDuration = 100 * time.Millisecond
-const IdleTimeout = 1200 * time.Millisecond
-const MaxPacketDelayMs = 400
-const MinPacketDelayMs = 110
+const IdleTimeout = 8000 * time.Millisecond
+const MaxPacketDelayMs = 10000
+const MinPacketDelayMs = 4000
 
 type MemberConfig struct {
 	ID   string

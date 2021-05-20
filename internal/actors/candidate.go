@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"github.com/kitengo/raft/internal/member"
 	"github.com/kitengo/raft/internal/models"
 	"log"
 	"time"
@@ -19,6 +20,7 @@ type Candidate interface {
 }
 
 type candidate struct {
+	member    member.RaftMember
 	state     raftstate.RaftState
 	term      raftterm.RaftTerm
 	voter     raftvoter.RaftVoter
@@ -51,16 +53,19 @@ func (c *candidate) Run() {
 		select {
 		case vs := <-reqVoteChan:
 			{
+				log.Println("Vote state is", vs)
 				var state raftstate.State
 				if vs == raftvoter.Follower {
+					log.Println("flipping over to be a follower")
 					state = raftstate.FollowerState
 				}
 				if vs == raftvoter.Leader {
+					log.Println("flipping over to be a leader")
+					c.member.SetLeaderID(c.member.Self().ID)
 					state = raftstate.LeaderState
 				}
 				c.state.SetState(state)
 				return
-
 			}
 		case aeReq := <-aeReqChan:
 			{
@@ -84,6 +89,11 @@ func (c *candidate) Run() {
 					c.state.SetState(raftstate.FollowerState)
 					return
 				}
+				if aer.LeaderId != "" {
+					c.member.SetLeaderID(aer.LeaderId)
+					c.state.SetState(raftstate.FollowerState)
+					return
+				}
 			}
 		case voteReq := <-voteReqChan:
 			{
@@ -104,6 +114,7 @@ func (c *candidate) Run() {
 			if tick.After(c.raftTimer.GetDeadline()) {
 				term = c.term.IncrementTerm()
 				reqVoteChan = c.voter.RequestVote(term)
+				c.raftTimer.SetDeadline(time.Now())
 			}
 		}
 	}
@@ -125,6 +136,7 @@ func (cp *candidateProvider) Provide() Candidate {
 		term:      cp.GetRaftTerm(),
 		voter:     cp.GetRaftVoter(),
 		raftTimer: cp.GetRaftTimer(),
+		member:    cp.GetRaftMember(),
 		aeRPC:     rpcLocator.GetAppendEntrySvc(),
 		voteRPC:   rpcLocator.GetRequestVoteSvc(),
 	}

@@ -84,7 +84,8 @@ func startServer(config rconfig.Config) {
 
 	//Initializing the raft server
 	raftServer := server.NewRaftServer(svcLocator.GetRpcLocator())
-	l, err := net.Listen("tcp", "127.0.0.1:4546")
+	selfAddress := fmt.Sprintf("%s:%s", config.ServerHost, config.ServerPort)
+	l, err := net.Listen("tcp", selfAddress)
 	if err != nil {
 		log.Printf("Error %v\n", err)
 		panic("Unable to start Raft server")
@@ -116,7 +117,6 @@ func handleConnection(conn net.Conn, raftServer server.RaftServer) {
 			responseEncoder.Encode(&response)
 			return
 		}
-		log.Printf("Received request %v\n", request)
 		respChan, errChan := raftServer.Accept(request)
 		for {
 			select {

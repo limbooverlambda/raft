@@ -72,12 +72,14 @@ func (l *leader) Run() {
 				})
 				if err != nil {
 					errChan <- err
-				}
-				respChan <- resp
-				aeResp := resp.(models.AppendEntryResponse)
-				if aeResp.Term > currentTerm {
-					l.state.SetState(raftstate.FollowerState)
-					return
+				} else {
+					respChan <- resp
+					aeResp := resp.(models.AppendEntryResponse)
+					if aeResp.Term > currentTerm {
+						log.Println("Received a higher term. flipping back to be a follower")
+						l.state.SetState(raftstate.FollowerState)
+						return
+					}
 				}
 			}
 		case voteReq := <-voteReqChan:
@@ -97,6 +99,7 @@ func (l *leader) Run() {
 				respChan <- resp
 				vResp := resp.(raftrpc.RequestVoteResponse)
 				if vResp.Term > currentTerm {
+					log.Println("Received a higher term. flipping back to be a follower")
 					l.state.SetState(raftstate.FollowerState)
 					return
 				}

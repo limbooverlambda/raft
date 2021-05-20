@@ -8,12 +8,13 @@ import (
 	"net"
 )
 
-func SendCommand(requestConv raftmodels.RequestConverter, ipAddress string) (response raftmodels.Response, err error) {
+func SendCommand(requestConv raftmodels.RequestConverter, ip, port string) (response raftmodels.Response, err error) {
 	defer func() {
 		if err != nil {
 			log.Printf("Encountered error %v\n", err)
 		}
 	}()
+	ipAddress := fmt.Sprintf("%s:%s", ip, port)
 	conn, err := net.Dial("tcp", ipAddress)
 	if err != nil {
 		err = fmt.Errorf("unable to dial %v due to %v", ipAddress, err)
@@ -41,7 +42,7 @@ func SendCommand(requestConv raftmodels.RequestConverter, ipAddress string) (res
 			err = fmt.Errorf("unable to decode response %v", err)
 			return
 		}
-		log.Printf("Got response %v\n", string(resp.Payload))
+		recvChan <- resp
 	}()
 	response = <-recvChan
 	return

@@ -9,6 +9,7 @@ import (
 	"log"
 )
 
+//go:generate stringer -type=VoteStatus
 type VoteStatus int
 
 const (
@@ -38,6 +39,7 @@ type raftVoter struct {
 }
 
 func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
+	log.Println("Requesting vote for term", term)
 	voteStatusChan := make(chan VoteStatus, 1)
 	candidateID := rv.raftMember.Self().ID
 	lastLogEntryMeta := rv.raftLog.GetCurrentLogEntry()
@@ -60,7 +62,10 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 		defer close(voteStatusChan)
 		defer close(errorChan)
 		defer close(voteResponseChan)
-		var voteCount int
+		//Vote for itself
+		voteCount := 1
+		rv.raftMember.SetVotedFor(candidateID)
+
 		majorityCount := (len(members) >> 1) + 1
 		for _, member := range members {
 			go rv.requestVote(member, requestVotePayload, voteResponseChan, errorChan)
@@ -77,13 +82,14 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 						voteCount++
 					}
 					if voteCount > majorityCount {
+						rv.raftMember.SetSelfToLeader()
 						voteStatusChan <- Leader
 						return
 					}
 				}
 			case err := <-errorChan:
 				{
-					log.Println("failed to recieve vote", err)
+					log.Println("failed to receive vote", err)
 				}
 			}
 		}
@@ -95,9 +101,11 @@ func (rv *raftVoter) requestVote(member raftmember.Entry,
 	payload raftmodels.RequestVotePayload,
 	responseChan chan raftmodels.RequestVoteResponse,
 	errChan chan error) {
-	resp, err := sender.SendCommand(&payload, member.Address)
+	resp, err := sender.SendCommand(&payload, member.Address, member.Port)
 	if err != nil {
 		log.Println("unable to send vote request due to", err)
+		errChan <- err
+		return
 	}
 	var vrResp raftmodels.RequestVoteResponse
 	err = vrResp.FromPayload(resp.Payload)
