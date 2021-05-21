@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"context"
 	"log"
 
 	svclocator "github.com/kitengo/raft/internal/locator"
@@ -9,7 +10,7 @@ import (
 
 type RaftSupervisor interface {
 	//Start the Supervisor routine
-	Start()
+	Start(ctx context.Context)
 }
 
 func NewRaftSupervisor(locator svclocator.ServiceLocator) RaftSupervisor {
@@ -32,7 +33,7 @@ type raftSupervisor struct {
 	candidateProvider CandidateProvider
 }
 
-func (rs *raftSupervisor) Start() {
+func (rs *raftSupervisor) Start(ctx context.Context) {
 loop:
 	for {
 		select {
@@ -41,7 +42,7 @@ loop:
 			case rstate.FollowerState:
 				rs.runFollower()
 			case rstate.CandidateState:
-				rs.runCandidate()
+				rs.runCandidate(ctx)
 			case rstate.LeaderState:
 				rs.runLeader()
 			case rstate.ShutdownState:
@@ -61,9 +62,9 @@ func (rs *raftSupervisor) runLeader() {
 	leader.Run()
 }
 
-func (rs *raftSupervisor) runCandidate() {
+func (rs *raftSupervisor) runCandidate(ctx context.Context) {
 	candidate := rs.candidateProvider.Provide()
-	candidate.Run()
+	candidate.Run(ctx)
 }
 
 func (rs *raftSupervisor) runFollower() {

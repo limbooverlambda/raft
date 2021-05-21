@@ -1,107 +1,148 @@
 package actors
 
-//import (
-//	"time"
-//
-//	"kitengo/raft/log"
-//	"kitengo/raft/rpc"
-//	"kitengo/raft/term"
-//	"kitengo/raft/timer"
-//	"kitengo/raft/transport"
-//	"kitengo/raft/voter"
-//)
-//
-//type candidateStub struct {
-//	fakeTransport   fakeTransport
-//	fakeTimer       fakeTimer
-//	fakeLog         fakeLog
-//	fakeVoter       fakeVoter
-//	fakeTerm        fakeTerm
-//	fakeAppendEntry fakeAppendEntry
-//	leaderTrigger   chan<- LeaderTrigger
-//	followerTrigger chan<- FollowerTrigger
-//}
-//
-//type fakeTransport struct {
-//	GetRequestChanFn func() <-chan transport.Request
-//	SendResponseFn   func(response transport.Response) error
-//	GetRequestTypeFn func(req transport.Request) transport.RequestType
-//	transport.Transport
-//}
-//
-//func (f fakeTransport) GetRequestChan() <-chan transport.Request {
-//	return f.GetRequestChanFn()
-//}
-//
-//func (f fakeTransport) SendResponse(response transport.Response) error {
-//	return f.SendResponseFn(response)
-//}
-//
-//func (f fakeTransport) GetRequestType(req transport.Request) transport.RequestType {
-//	return f.GetRequestTypeFn(req)
-//}
-//
-//type fakeTimer struct {
-//	SetDeadlineFn func(time.Time)
-//	GetDeadlineFn func() time.Time
-//	timer.RaftTimer
-//}
-//
-//func (ft fakeTimer) SetDeadline(currentTime time.Time) {
-//	ft.SetDeadlineFn(currentTime)
-//}
-//
-//func (ft fakeTimer) GetDeadline() time.Time {
-//	return ft.GetDeadlineFn()
-//}
-//
-//type fakeLog struct {
-//	AppendEntryFn func(entry []byte)
-//	log.RaftLog
-//}
-//
-//func (fl fakeLog) AppendEntry(entry []byte) {
-//	fl.AppendEntryFn(entry)
-//}
-//
-//type fakeVoter struct {
-//	RequestVoteFn func(term int64) <-chan voter.VoteStatus
-//	voter.RaftVoter
-//}
-//
-//func (fv fakeVoter) RequestVote(term int64) <-chan voter.VoteStatus {
-//	return fv.RequestVoteFn(term)
-//}
-//
-//type fakeTerm struct {
-//	term.RaftTerm
-//	GetTermFn       func() int64
-//	IncrementTermFn func() int64
-//}
-//
-//func (fterm fakeTerm) GetTerm() int64 {
-//	return fterm.GetTermFn()
-//}
-//
-//func (fterm fakeTerm) IncrementTerm() int64 {
-//	return fterm.IncrementTermFn()
-//}
-//
-//type fakeAppendEntry struct {
-//	AppendEntryReqChanFn  func() <-chan rpc.AppendEntryRequest
-//	ProcessFn             func(request rpc.AppendEntryRequest) rpc.AppendEntryResponse
-//	AppendEntryRespChanFn func() chan<- rpc.AppendEntryResponse
-//	rpc.RaftAppendEntry
-//}
-//
-//func (fae fakeAppendEntry) AppendEntryReqChan() <-chan rpc.AppendEntryRequest {
-//	return fae.AppendEntryReqChanFn()
-//}
-//
-//func (fae fakeAppendEntry) Process(request rpc.AppendEntryRequest) rpc.AppendEntryResponse {
-//	return fae.ProcessFn(request)
-//}
-//
-//func (fae fakeAppendEntry) AppendEntryRespChan() chan<- rpc.AppendEntryResponse {
-//	return fae.AppendEntryRespChanFn()
-//}
+import (
+	"github.com/kitengo/raft/internal/member"
+	raftrpc "github.com/kitengo/raft/internal/rpc"
+	raftstate "github.com/kitengo/raft/internal/state"
+	raftterm "github.com/kitengo/raft/internal/term"
+	rafttimer "github.com/kitengo/raft/internal/timer"
+	raftvoter "github.com/kitengo/raft/internal/voter"
+	"time"
+)
+
+type candidateStub struct {
+	fakeMember  fakeMember
+	fakeState   fakeRaftState
+	fakeTerm    fakeRaftTerm
+	fakeVoter   fakeRaftVoter
+	fakeTimer   fakeRaftTimer
+	fakeAeRPC   fakeAeRPC
+	fakeVoteRPC fakeVoteRPC
+}
+
+type fakeMember struct {
+	GetSetLeaderIDFn func(leaderID string)
+	GetSelfFn        func() member.Entry
+	member.RaftMember
+}
+
+func (fakeMember) List() ([]member.Entry, error) {
+	panic("implement me")
+}
+
+func (fakeMember) Leader() member.Entry {
+	panic("implement me")
+}
+
+func (fm fakeMember) Self() member.Entry {
+	return fm.GetSelfFn()
+}
+
+func (fakeMember) SetSelfToLeader() {
+	panic("implement me")
+}
+
+func (fm fakeMember) SetLeaderID(leaderID string) {
+	fm.GetSetLeaderIDFn(leaderID)
+}
+
+func (fakeMember) GetLeaderID() (leaderID string) {
+	panic("implement me")
+}
+
+func (fakeMember) VotedFor() (candidateID string) {
+	panic("implement me")
+}
+
+func (fakeMember) SetVotedFor(candidateID string) {
+	panic("implement me")
+}
+
+type fakeRaftState struct {
+	GetSetStateFn func(state raftstate.State)
+	raftstate.RaftState
+}
+
+func (frs fakeRaftState) GetStateChan() <-chan raftstate.State {
+	panic("implement me")
+}
+
+func (frs fakeRaftState) SetState(state raftstate.State) {
+	frs.GetSetStateFn(state)
+}
+
+type fakeRaftTerm struct {
+	GetIncTermFn func() int64
+	raftterm.RaftTerm
+}
+
+func (fakeRaftTerm) GetTerm() int64 {
+	panic("implement me")
+}
+
+func (frt fakeRaftTerm) IncrementTerm() int64 {
+	return frt.GetIncTermFn()
+}
+
+type fakeRaftVoter struct {
+	GetRequestVoteFn func(term int64) <-chan raftvoter.VoteStatus
+	raftvoter.RaftVoter
+}
+
+func (frv fakeRaftVoter) RequestVote(term int64) <-chan raftvoter.VoteStatus {
+	return frv.GetRequestVoteFn(term)
+}
+
+type fakeRaftTimer struct {
+	GetDeadlineFn    func() time.Time
+	GetSetDeadlineFn func(currentTime time.Time)
+	rafttimer.RaftTimer
+}
+
+func (frt fakeRaftTimer) SetDeadline(currentTime time.Time) {
+	frt.GetSetDeadlineFn(currentTime)
+}
+
+func (frt fakeRaftTimer) GetDeadline() time.Time {
+	return frt.GetDeadlineFn()
+}
+
+func (fakeRaftTimer) SetIdleTimeout() {
+	panic("implement me")
+}
+
+func (fakeRaftTimer) GetIdleTimeout() time.Time {
+	panic("implement me")
+}
+
+type fakeAeRPC struct {
+	GetRaftRpcReqChanFn func() <-chan raftrpc.RaftRpcRequest
+	GetProcessFn        func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error)
+	raftrpc.RaftRpc
+}
+
+func (fakeAeRPC) Receive(request raftrpc.RaftRpcRequest) {
+	panic("implement me")
+}
+
+func (far fakeAeRPC) Process(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
+	return far.GetProcessFn(meta)
+}
+
+func (far fakeAeRPC) RaftRpcReqChan() <-chan raftrpc.RaftRpcRequest {
+	return far.GetRaftRpcReqChanFn()
+}
+
+type fakeVoteRPC struct {
+	GetProcessFn        func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error)
+	GetRaftRpcReqChanFn func() <-chan raftrpc.RaftRpcRequest
+	raftrpc.RaftRpc
+}
+
+func (fvr fakeVoteRPC) RaftRpcReqChan() <-chan raftrpc.RaftRpcRequest {
+	return fvr.GetRaftRpcReqChanFn()
+}
+
+func (fvr fakeVoteRPC) Process(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
+	return fvr.GetProcessFn(meta)
+}
