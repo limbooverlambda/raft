@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/gob"
 	"fmt"
 	"github.com/kitengo/raft/internal/rconfig"
@@ -78,9 +79,11 @@ func startServer(config rconfig.Config) {
 	//Initializing the service locator
 	svcLocator := locator.NewServiceLocator(config)
 
+	ctxt, _ := context.WithCancel(context.Background())
+
 	//Initializing the RaftSupervisor
 	raftSupervisor := actors.NewRaftSupervisor(svcLocator)
-	go func() { raftSupervisor.Start() }()
+	go func() { raftSupervisor.Start(ctxt) }()
 
 	//Initializing the raft server
 	raftServer := server.NewRaftServer(svcLocator.GetRpcLocator())

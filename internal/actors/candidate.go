@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"context"
 	"github.com/kitengo/raft/internal/member"
 	"github.com/kitengo/raft/internal/models"
 	"log"
@@ -16,7 +17,7 @@ import (
 )
 
 type Candidate interface {
-	Run()
+	Run(ctx context.Context)
 }
 
 type candidate struct {
@@ -39,8 +40,9 @@ type candidate struct {
 //• If AppendEntries RPC received from new leader: convert to
 //  follower
 //• If election timeout elapses: start new election
-func (c *candidate) Run() {
-	log.Println("Candidate")
+func (c *candidate) Run(ctx context.Context) {
+	log.Println("Setting state to Candidate")
+	c.state.SetState(raftstate.CandidateState)
 	aeReqChan := c.aeRPC.RaftRpcReqChan()
 	voteReqChan := c.voteRPC.RaftRpcReqChan()
 	term := c.term.IncrementTerm()
@@ -51,74 +53,108 @@ func (c *candidate) Run() {
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
+		case <-ctx.Done():
+			{
+				log.Println("Cancelling the running candidate")
+				return
+			}
 		case vs := <-reqVoteChan:
 			{
-				log.Println("Vote state is", vs)
-				var state raftstate.State
-				if vs == raftvoter.Follower {
-					log.Println("flipping over to be a follower")
-					state = raftstate.FollowerState
-				}
-				if vs == raftvoter.Leader {
-					log.Println("flipping over to be a leader")
-					c.member.SetLeaderID(c.member.Self().ID)
-					state = raftstate.LeaderState
-				}
+				state := c.processVoteStatus(vs)
 				c.state.SetState(state)
-				return
+				switch state {
+				case raftstate.FollowerState:
+					log.Println("candidate -> follower")
+					return
+				case raftstate.LeaderState:
+					log.Println("candidate ->  leader")
+					myID := c.member.Self().ID
+					c.member.SetLeaderID(myID)
+					return
+				default:
+					log.Println("no majority, staying behind as the candidate")
+				}
 			}
 		case aeReq := <-aeReqChan:
 			{
-				respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
-				aer := aeReq.(raftrpc.AppendEntry)
-				resp, err := c.aeRPC.Process(raftrpc.AppendEntryMeta{
-					Term:         aer.Term,
-					LeaderId:     aer.LeaderId,
-					PrevLogIndex: aer.PrevLogIndex,
-					PrevLogTerm:  aer.PrevLogTerm,
-					Entries:      aer.Entries,
-					LeaderCommit: aer.LeaderCommit,
-				})
-				if err != nil {
-					errChan <- err
-				}
-				respChan <- resp
-				//reset the deadline
-				aeResp := resp.(models.AppendEntryResponse)
-				if aeResp.Term > term {
-					c.state.SetState(raftstate.FollowerState)
-					return
-				}
-				if aer.LeaderId != "" {
-					c.member.SetLeaderID(aer.LeaderId)
-					c.state.SetState(raftstate.FollowerState)
-					return
+				if respTerm, respLeaderID, err := c.processAERequest(aeReq); err == nil {
+					if respTerm > term {
+						if respLeaderID != "" {
+							c.member.SetLeaderID(respLeaderID)
+						}
+						c.state.SetState(raftstate.FollowerState)
+						return
+					}
 				}
 			}
 		case voteReq := <-voteReqChan:
 			{
-				respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
-				vr := voteReq.(raftrpc.RequestVote)
-				resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
-					Term:         vr.Term,
-					CandidateId:  vr.CandidateId,
-					LastLogIndex: vr.LastLogIndex,
-					LastLogTerm:  vr.LastLogTerm,
-				})
-				if err != nil {
-					errChan <- err
-				}
-				respChan <- resp
+				c.processVoteReq(voteReq)
 			}
 		default:
-			if tick.After(c.raftTimer.GetDeadline()) {
-				term = c.term.IncrementTerm()
-				reqVoteChan = c.voter.RequestVote(term)
-				c.raftTimer.SetDeadline(time.Now())
-			}
+			c.checkForExceededDeadline(tick, term, reqVoteChan)
 		}
 	}
 
+}
+
+func (c *candidate) checkForExceededDeadline(tick time.Time, term int64, reqVoteChan <-chan raftvoter.VoteStatus) {
+	if tick.After(c.raftTimer.GetDeadline()) {
+		term = c.term.IncrementTerm()
+		reqVoteChan = c.voter.RequestVote(term)
+		c.raftTimer.SetDeadline(time.Now())
+	}
+}
+
+func (c *candidate) processVoteReq(voteReq raftrpc.RaftRpcRequest) {
+	respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
+	vr := voteReq.(raftrpc.RequestVote)
+	resp, err := c.voteRPC.Process(raftrpc.RequestVoteMeta{
+		Term:         vr.Term,
+		CandidateId:  vr.CandidateId,
+		LastLogIndex: vr.LastLogIndex,
+		LastLogTerm:  vr.LastLogTerm,
+	})
+	if err != nil {
+		errChan <- err
+	} else {
+		respChan <- resp
+	}
+}
+
+func (c *candidate) processAERequest(req raftrpc.RaftRpcRequest) (term int64, leaderID string, err error) {
+	respChan, errChan := req.GetResponseChan(), req.GetErrorChan()
+	aeReq := req.(raftrpc.AppendEntry)
+	aeMeta := raftrpc.AppendEntryMeta{
+		Term:         aeReq.Term,
+		LeaderId:     aeReq.LeaderId,
+		PrevLogIndex: aeReq.PrevLogIndex,
+		PrevLogTerm:  aeReq.PrevLogTerm,
+		Entries:      aeReq.Entries,
+		LeaderCommit: aeReq.LeaderCommit,
+	}
+	resp, err := c.aeRPC.Process(aeMeta)
+	if err != nil {
+		errChan <- err
+		return
+	} else {
+		respChan <- resp
+		aeResp := resp.(models.AppendEntryResponse)
+		term = aeResp.Term
+		leaderID = aeReq.LeaderId
+		return
+	}
+}
+
+func (c *candidate) processVoteStatus(vs raftvoter.VoteStatus) raftstate.State {
+	switch vs {
+	case raftvoter.Follower:
+		return raftstate.FollowerState
+	case raftvoter.Leader:
+		return raftstate.LeaderState
+	default:
+		return raftstate.CandidateState
+	}
 }
 
 type CandidateProvider interface {
