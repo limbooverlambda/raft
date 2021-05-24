@@ -40,7 +40,7 @@ loop:
 		case state := <-rs.raftState.GetStateChan():
 			switch state {
 			case rstate.FollowerState:
-				rs.runFollower()
+				rs.runFollower(ctx)
 			case rstate.CandidateState:
 				rs.runCandidate(ctx)
 			case rstate.LeaderState:
@@ -67,7 +67,7 @@ func (rs *raftSupervisor) runCandidate(ctx context.Context) {
 	candidate.Run(ctx)
 }
 
-func (rs *raftSupervisor) runFollower() {
+func (rs *raftSupervisor) runFollower(ctx context.Context) {
 	follower := rs.followerProvider.Provide()
-	follower.Run()
+	follower.Run(ctx)
 }

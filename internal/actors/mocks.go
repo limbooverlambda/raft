@@ -20,6 +20,13 @@ type candidateStub struct {
 	fakeVoteRPC fakeVoteRPC
 }
 
+type followerStub struct {
+	fakeState   fakeRaftState
+	fakeAeRPC   fakeAeRPC
+	fakeVoteRPC fakeVoteRPC
+	fakeTimer   fakeRaftTimer
+}
+
 type fakeMember struct {
 	GetSetLeaderIDFn func(leaderID string)
 	GetSelfFn        func() member.Entry
@@ -145,4 +152,116 @@ func (fvr fakeVoteRPC) RaftRpcReqChan() <-chan raftrpc.RaftRpcRequest {
 
 func (fvr fakeVoteRPC) Process(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
 	return fvr.GetProcessFn(meta)
+}
+
+type candidateHelperStub struct {
+	voteStatusChan   chan raftvoter.VoteStatus
+	aeRequestChan    chan raftrpc.RaftRpcRequest
+	voteRequestsChan chan raftrpc.RaftRpcRequest
+	candidateStub
+}
+
+type followerHelperStub struct {
+	aeRequestChan    chan raftrpc.RaftRpcRequest
+	voteRequestsChan chan raftrpc.RaftRpcRequest
+	followerStub
+}
+
+func createFollowerStub() followerHelperStub {
+	aeRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	voteRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	fStub := followerStub{
+		fakeState:   getFakeRaftState(),
+		fakeAeRPC:   getFakeAeRPC(aeRequests),
+		fakeVoteRPC: getFakeVoteRPC(voteRequests),
+		fakeTimer:   getFakeRaftTimer(),
+	}
+	return followerHelperStub{
+		aeRequestChan:    aeRequests,
+		voteRequestsChan: voteRequests,
+		followerStub:     fStub,
+	}
+}
+
+func createCandidateStub() candidateHelperStub {
+	voteStatuses := make(chan raftvoter.VoteStatus, 1)
+	aeRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	voteRequests := make(chan raftrpc.RaftRpcRequest, 1)
+
+	cStub := candidateStub{
+		fakeMember:  getFakeMember(),
+		fakeState:   getFakeRaftState(),
+		fakeTerm:    getFakeRaftTerm(),
+		fakeVoter:   getFakeRaftVoter(voteStatuses),
+		fakeTimer:   getFakeRaftTimer(),
+		fakeAeRPC:   getFakeAeRPC(aeRequests),
+		fakeVoteRPC: getFakeVoteRPC(voteRequests),
+	}
+	return candidateHelperStub{
+		voteStatusChan:   voteStatuses,
+		aeRequestChan:    aeRequests,
+		voteRequestsChan: voteRequests,
+		candidateStub:    cStub,
+	}
+}
+
+func getFakeVoteRPC(voteRequests chan raftrpc.RaftRpcRequest) fakeVoteRPC {
+	return fakeVoteRPC{
+		GetRaftRpcReqChanFn: func() <-chan raftrpc.RaftRpcRequest {
+			return voteRequests
+		},
+	}
+}
+
+func getFakeAeRPC(aeRequests chan raftrpc.RaftRpcRequest) fakeAeRPC {
+	return fakeAeRPC{
+		GetRaftRpcReqChanFn: func() <-chan raftrpc.RaftRpcRequest {
+			return aeRequests
+		},
+	}
+}
+
+func getFakeRaftTimer() fakeRaftTimer {
+	return fakeRaftTimer{
+		GetDeadlineFn: func() time.Time {
+			return time.Now()
+		},
+		GetSetDeadlineFn: func(currentTime time.Time) {
+			//NO-OP
+		},
+	}
+}
+
+func getFakeRaftVoter(voteStatuses chan raftvoter.VoteStatus) fakeRaftVoter {
+	return fakeRaftVoter{
+		GetRequestVoteFn: func(term int64) <-chan raftvoter.VoteStatus {
+			return voteStatuses
+		},
+	}
+}
+
+func getFakeRaftTerm() fakeRaftTerm {
+	return fakeRaftTerm{
+		GetIncTermFn: func() int64 {
+			return 1
+		},
+	}
+}
+
+func getFakeRaftState() fakeRaftState {
+	return fakeRaftState{
+		GetSetStateFn: func(state raftstate.State) {
+		},
+	}
+}
+
+func getFakeMember() fakeMember {
+	return fakeMember{
+		GetSetLeaderIDFn: func(leaderID string) {
+
+		},
+		GetSelfFn: func() member.Entry {
+			return member.Entry{}
+		},
+	}
 }
