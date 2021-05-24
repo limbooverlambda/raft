@@ -228,5 +228,3 @@ func Test_candidate_Run_VoteRequest(t *testing.T) {
 		t.Errorf("expected %v but actual %v", expectedState, actualState)
 	}
 }
-
-

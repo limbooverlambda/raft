@@ -41,11 +41,11 @@ func Test_follower_Run_AppendEntry(t *testing.T) {
 	respChan := make(chan rpc.RaftRpcResponse, 1)
 	errChan := make(chan error, 1)
 	fStub.aeRequestChan <- rpc.AppendEntry{
-		Term:     1,
-		RespChan: respChan,
+		Term:      1,
+		RespChan:  respChan,
 		ErrorChan: errChan,
 	}
-	time.AfterFunc(2 * time.Second, cancel)
+	time.AfterFunc(2*time.Second, cancel)
 	wg.Wait()
 	if actualAppendResponse != expectedAppendResponse {
 		t.Errorf("expected %v but actual %v", expectedAppendResponse, actualAppendResponse)
@@ -82,11 +82,11 @@ func Test_follower_Run_VoteRequest(t *testing.T) {
 	respChan := make(chan rpc.RaftRpcResponse, 1)
 	errChan := make(chan error, 1)
 	fStub.voteRequestsChan <- rpc.RequestVote{
-		Term:         1,
-		RespChan:     respChan,
-		ErrorChan:    errChan,
+		Term:      1,
+		RespChan:  respChan,
+		ErrorChan: errChan,
 	}
-	time.AfterFunc(2 * time.Second, cancel)
+	time.AfterFunc(2*time.Second, cancel)
 	wg.Wait()
 	if actualReqVoteResponse != expectedReqVoteResponse {
 		t.Errorf("expected %v but actual %v", expectedReqVoteResponse, actualReqVoteResponse)
@@ -114,7 +114,6 @@ func Test_follower_Run_DeadlineExceeded(t *testing.T) {
 		voteRPC:   fStub.fakeVoteRPC,
 	}
 
-
 	ctx, _ := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -127,4 +126,3 @@ func Test_follower_Run_DeadlineExceeded(t *testing.T) {
 		t.Errorf("expected %v but actual %v", expectedState, actualState)
 	}
 }
-
