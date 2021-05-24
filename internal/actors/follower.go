@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 )
 
 type Follower interface {
-	Run()
+	Run(ctx context.Context)
 }
 
 type follower struct {
@@ -22,8 +23,9 @@ type follower struct {
 	raftTimer rafttimer.RaftTimer
 }
 
-func (f *follower) Run() {
-	log.Println("Follower")
+func (f *follower) Run(ctx context.Context) {
+	log.Println("Setting state to Follower")
+	f.state.SetState(raftstate.FollowerState)
 	aeReqChan := f.aeRPC.RaftRpcReqChan()
 	voteReqChan := f.voteRPC.RaftRpcReqChan()
 	f.raftTimer.SetDeadline(time.Now())
@@ -31,22 +33,29 @@ func (f *follower) Run() {
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
+		case <-ctx.Done():
+			{
+				log.Println("Cancelling the running follower")
+				return
+			}
 		case aeReq := <-aeReqChan:
 			{
 				respChan, errChan := aeReq.GetResponseChan(), aeReq.GetErrorChan()
 				aer := aeReq.(raftrpc.AppendEntry)
-				resp, err := f.aeRPC.Process(raftrpc.AppendEntryMeta{
+				aeMeta := raftrpc.AppendEntryMeta{
 					Term:         aer.Term,
 					LeaderId:     aer.LeaderId,
 					PrevLogIndex: aer.PrevLogIndex,
 					PrevLogTerm:  aer.PrevLogTerm,
 					Entries:      aer.Entries,
 					LeaderCommit: aer.LeaderCommit,
-				})
+				}
+				resp, err := f.aeRPC.Process(aeMeta)
 				if err != nil {
 					errChan <- err
+				} else {
+					respChan <- resp
 				}
-				respChan <- resp
 				//reset the deadline
 				f.raftTimer.SetDeadline(tick)
 			}
@@ -54,16 +63,18 @@ func (f *follower) Run() {
 			{
 				respChan, errChan := voteReq.GetResponseChan(), voteReq.GetErrorChan()
 				vr := voteReq.(raftrpc.RequestVote)
-				resp, err := f.voteRPC.Process(raftrpc.RequestVoteMeta{
+				reqVoteMeta := raftrpc.RequestVoteMeta{
 					Term:         vr.Term,
 					CandidateId:  vr.CandidateId,
 					LastLogIndex: vr.LastLogIndex,
 					LastLogTerm:  vr.LastLogTerm,
-				})
+				}
+				resp, err := f.voteRPC.Process(reqVoteMeta)
 				if err != nil {
 					errChan <- err
+				} else {
+					respChan <- resp
 				}
-				respChan <- resp
 				//reset the deadline
 				f.raftTimer.SetDeadline(tick)
 			}
