@@ -7,6 +7,7 @@ import (
 	raftrpc "github.com/kitengo/raft/internal/rpc"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftvoter "github.com/kitengo/raft/internal/voter"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -180,19 +181,19 @@ func Test_candidate_Run_AE_WithHigherTerm(t *testing.T) {
 	}
 }
 
-func Test_candidate_Run_VoteRequest(t *testing.T) {
-	var actualState raftstate.State
-	expectedState := raftstate.CandidateState
+func Test_candidate_Run_ProcessVoteRequest(t *testing.T) {
+	var actualResponse models.RequestVoteResponse
+	expectedResponse := models.RequestVoteResponse{
+		Term:        2,
+		VoteGranted: true,
+	}
 
 	cStub := createCandidateStub()
 	cStub.fakeVoteRPC.GetProcessFn = func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
-		return models.RequestVoteResponse{
-			Term:        2,
-			VoteGranted: true,
-		}, nil
+		return expectedResponse, nil
 	}
 	cStub.fakeState.GetSetStateFn = func(state raftstate.State) {
-		actualState = state
+		log.Println("setting state to", state)
 	}
 	voteRequests := cStub.voteRequestsChan
 	testCandidate := candidate{
@@ -206,10 +207,10 @@ func Test_candidate_Run_VoteRequest(t *testing.T) {
 	}
 
 	cctx, cancel := context.WithCancel(context.Background())
-	//var wg sync.WaitGroup
-	//wg.Add(1)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		//defer wg.Done()
+		defer wg.Done()
 		testCandidate.Run(cctx)
 	}()
 	respChan := make(chan raftrpc.RaftRpcResponse, 1)
@@ -222,9 +223,11 @@ func Test_candidate_Run_VoteRequest(t *testing.T) {
 		RespChan:     respChan,
 		ErrorChan:    errChan,
 	}
-	<-time.After(1 * time.Second)
-	cancel()
-	if actualState != expectedState {
-		t.Errorf("expected %v but actual %v", expectedState, actualState)
+	time.AfterFunc(2*time.Second, cancel)
+	wg.Wait()
+	resp := <-respChan
+	actualResponse = resp.(models.RequestVoteResponse)
+	if actualResponse != expectedResponse {
+		t.Errorf("expected %v but actual %v", expectedResponse, actualResponse)
 	}
 }

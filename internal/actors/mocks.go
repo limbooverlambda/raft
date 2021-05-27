@@ -27,6 +27,16 @@ type followerStub struct {
 	fakeTimer   fakeRaftTimer
 }
 
+type leaderStub struct {
+	state     fakeRaftState
+	heartbeat fakeRaftHeartbeat
+	clientRPC fakeClientRPC
+	aeRPC     fakeAeRPC
+	voteRPC   fakeVoteRPC
+	raftTerm  fakeRaftTerm
+	raftTimer fakeRaftTimer
+}
+
 type fakeMember struct {
 	GetSetLeaderIDFn func(leaderID string)
 	GetSelfFn        func() member.Entry
@@ -103,6 +113,8 @@ func (frv fakeRaftVoter) RequestVote(term int64) <-chan raftvoter.VoteStatus {
 type fakeRaftTimer struct {
 	GetDeadlineFn    func() time.Time
 	GetSetDeadlineFn func(currentTime time.Time)
+	GetSetIdleTimeFn func()
+	GetIdleTimoutFn  func() time.Time
 	rafttimer.RaftTimer
 }
 
@@ -114,12 +126,12 @@ func (frt fakeRaftTimer) GetDeadline() time.Time {
 	return frt.GetDeadlineFn()
 }
 
-func (fakeRaftTimer) SetIdleTimeout() {
-	panic("implement me")
+func (frt fakeRaftTimer) SetIdleTimeout() {
+	frt.GetSetIdleTimeFn()
 }
 
-func (fakeRaftTimer) GetIdleTimeout() time.Time {
-	panic("implement me")
+func (frt fakeRaftTimer) GetIdleTimeout() time.Time {
+	return frt.GetIdleTimoutFn()
 }
 
 type fakeAeRPC struct {
@@ -154,6 +166,31 @@ func (fvr fakeVoteRPC) Process(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcRespons
 	return fvr.GetProcessFn(meta)
 }
 
+type fakeClientRPC struct {
+	GetProcessFn        func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error)
+	GetRaftRpcReqChanFn func() <-chan raftrpc.RaftRpcRequest
+}
+
+func (fakeClientRPC) Receive(request raftrpc.RaftRpcRequest) {
+	panic("implement me")
+}
+
+func (fcr fakeClientRPC) Process(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
+	return fcr.GetProcessFn(meta)
+}
+
+func (fcr fakeClientRPC) RaftRpcReqChan() <-chan raftrpc.RaftRpcRequest {
+	return fcr.GetRaftRpcReqChanFn()
+}
+
+type fakeRaftHeartbeat struct {
+	GetSendHeartBeatFn func()
+}
+
+func (frh fakeRaftHeartbeat) SendHeartbeats() {
+	frh.GetSendHeartBeatFn()
+}
+
 type candidateHelperStub struct {
 	voteStatusChan   chan raftvoter.VoteStatus
 	aeRequestChan    chan raftrpc.RaftRpcRequest
@@ -165,6 +202,13 @@ type followerHelperStub struct {
 	aeRequestChan    chan raftrpc.RaftRpcRequest
 	voteRequestsChan chan raftrpc.RaftRpcRequest
 	followerStub
+}
+
+type leaderHelperStub struct {
+	aeRequestChan     chan raftrpc.RaftRpcRequest
+	voteRequestsChan  chan raftrpc.RaftRpcRequest
+	clientRequestChan chan raftrpc.RaftRpcRequest
+	leaderStub
 }
 
 func createFollowerStub() followerHelperStub {
@@ -205,6 +249,27 @@ func createCandidateStub() candidateHelperStub {
 	}
 }
 
+func createLeaderStub() leaderHelperStub {
+	aeRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	voteRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	clientRequests := make(chan raftrpc.RaftRpcRequest, 1)
+	lStub := leaderStub{
+		state:     getFakeRaftState(),
+		heartbeat: getFakeRaftHeartbeat(),
+		clientRPC: getFakeClientRPC(clientRequests),
+		aeRPC:     getFakeAeRPC(aeRequests),
+		voteRPC:   getFakeVoteRPC(voteRequests),
+		raftTerm:  getFakeRaftTerm(),
+		raftTimer: getFakeRaftTimer(),
+	}
+	return leaderHelperStub{
+		aeRequestChan:     aeRequests,
+		voteRequestsChan:  voteRequests,
+		clientRequestChan: clientRequests,
+		leaderStub:        lStub,
+	}
+}
+
 func getFakeVoteRPC(voteRequests chan raftrpc.RaftRpcRequest) fakeVoteRPC {
 	return fakeVoteRPC{
 		GetRaftRpcReqChanFn: func() <-chan raftrpc.RaftRpcRequest {
@@ -217,6 +282,14 @@ func getFakeAeRPC(aeRequests chan raftrpc.RaftRpcRequest) fakeAeRPC {
 	return fakeAeRPC{
 		GetRaftRpcReqChanFn: func() <-chan raftrpc.RaftRpcRequest {
 			return aeRequests
+		},
+	}
+}
+
+func getFakeClientRPC(clientRequests chan raftrpc.RaftRpcRequest) fakeClientRPC {
+	return fakeClientRPC{
+		GetRaftRpcReqChanFn: func() <-chan raftrpc.RaftRpcRequest {
+			return clientRequests
 		},
 	}
 }
@@ -264,4 +337,8 @@ func getFakeMember() fakeMember {
 			return member.Entry{}
 		},
 	}
+}
+
+func getFakeRaftHeartbeat() fakeRaftHeartbeat {
+	return fakeRaftHeartbeat{}
 }

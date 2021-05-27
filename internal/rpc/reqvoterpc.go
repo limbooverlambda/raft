@@ -73,9 +73,9 @@ func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		return RequestVoteResponse{}, errors.New("failed to receive request vote")
 	}
 	currentTerm := rrV.raftTerm.GetTerm()
-	if requestVoteMeta.Term < currentTerm {
-		log.Println("Current term is greater than incoming term, rejecting vote request from", requestVoteMeta.CandidateId)
-		return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
+	if requestVoteMeta.Term > currentTerm {
+		log.Println("Current term is less than incoming term, accepting vote request from", requestVoteMeta.CandidateId)
+		return RequestVoteResponse{Term: currentTerm, VoteGranted: true}, nil
 	}
 	votedFor := rrV.raftMember.VotedFor()
 	isLogUptoDate := rrV.isLogUptoDate(requestVoteMeta)

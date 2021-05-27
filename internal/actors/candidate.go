@@ -42,7 +42,6 @@ type candidate struct {
 //• If election timeout elapses: start new election
 func (c *candidate) Run(ctx context.Context) {
 	log.Println("Setting state to Candidate")
-	c.state.SetState(raftstate.CandidateState)
 	aeReqChan := c.aeRPC.RaftRpcReqChan()
 	voteReqChan := c.voteRPC.RaftRpcReqChan()
 	term := c.term.IncrementTerm()
@@ -61,6 +60,7 @@ func (c *candidate) Run(ctx context.Context) {
 		case vs := <-reqVoteChan:
 			{
 				state := c.processVoteStatus(vs)
+				log.Println("Candidate, voteStatus", state)
 				c.state.SetState(state)
 				switch state {
 				case raftstate.FollowerState:
@@ -72,13 +72,13 @@ func (c *candidate) Run(ctx context.Context) {
 					c.member.SetLeaderID(myID)
 					return
 				default:
-					log.Println("no majority, staying behind as the candidate")
+					log.Println("no majority, staying behind as ", state)
 				}
 			}
 		case aeReq := <-aeReqChan:
 			{
 				if respTerm, respLeaderID, err := c.processAERequest(aeReq); err == nil {
-					if respTerm > term {
+					if respTerm >= term {
 						if respLeaderID != "" {
 							c.member.SetLeaderID(respLeaderID)
 						}
@@ -92,18 +92,20 @@ func (c *candidate) Run(ctx context.Context) {
 				c.processVoteReq(voteReq)
 			}
 		default:
-			c.checkForExceededDeadline(tick, term, reqVoteChan)
+			reqVoteChan = c.checkForExceededDeadline(tick, term)
 		}
 	}
 
 }
 
-func (c *candidate) checkForExceededDeadline(tick time.Time, term int64, reqVoteChan <-chan raftvoter.VoteStatus) {
+func (c *candidate) checkForExceededDeadline(tick time.Time, term int64) <-chan raftvoter.VoteStatus {
 	if tick.After(c.raftTimer.GetDeadline()) {
 		term = c.term.IncrementTerm()
-		reqVoteChan = c.voter.RequestVote(term)
+		reqVoteChan := c.voter.RequestVote(term)
 		c.raftTimer.SetDeadline(time.Now())
+		return reqVoteChan
 	}
+	return nil
 }
 
 func (c *candidate) processVoteReq(voteReq raftrpc.RaftRpcRequest) {

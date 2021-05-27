@@ -1,6 +1,7 @@
 package actors
 
 import (
+	"context"
 	"github.com/kitengo/raft/internal/models"
 	"log"
 	"time"
@@ -15,7 +16,7 @@ import (
 )
 
 type Leader interface {
-	Run()
+	Run(ctx context.Context)
 }
 
 type leader struct {
@@ -28,7 +29,7 @@ type leader struct {
 	raftTimer rafttimer.RaftTimer
 }
 
-func (l *leader) Run() {
+func (l *leader) Run(ctx context.Context) {
 	log.Println("Leader")
 	clientReqChan := l.clientRPC.RaftRpcReqChan()
 	aeReqChan := l.aeRPC.RaftRpcReqChan()
@@ -42,6 +43,11 @@ func (l *leader) Run() {
 	defer ticker.Stop()
 	for tick := range ticker.C {
 		select {
+		case <-ctx.Done():
+			{
+				log.Println("Cancelling the running follower")
+				return
+			}
 		// If command received from client: append entry to local log,
 		// respond after entry applied to raftstate machine (§5.3)
 		case clientReq := <-clientReqChan:
@@ -54,8 +60,9 @@ func (l *leader) Run() {
 				l.raftTimer.SetIdleTimeout()
 				if err != nil {
 					errChan <- err
+				} else {
+					respChan <- resp
 				}
-				respChan <- resp
 			}
 		case aeReq := <-aeReqChan:
 			{

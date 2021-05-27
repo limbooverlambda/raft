@@ -59,9 +59,14 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 	voteResponseChan := make(chan raftmodels.RequestVoteResponse)
 	errorChan := make(chan error)
 	go func() {
-		defer close(voteStatusChan)
-		defer close(errorChan)
-		defer close(voteResponseChan)
+		log.Println("Spawning go routine to request vote for term", term)
+		defer func() {
+			log.Println("Closing all the channels for request vote")
+			close(voteStatusChan)
+			close(errorChan)
+			close(voteResponseChan)
+		}()
+
 		//Vote for itself
 		voteCount := 1
 		rv.raftMember.SetVotedFor(candidateID)
@@ -75,6 +80,7 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 			case vr := <-voteResponseChan:
 				{
 					if vr.Term > rv.raftTerm.GetTerm() {
+						log.Printf("Incoming term %d is greater than current term %d. Be a follower\n", vr.Term, rv.raftTerm.GetTerm())
 						voteStatusChan <- Follower
 						return
 					}
@@ -82,6 +88,7 @@ func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
 						voteCount++
 					}
 					if voteCount > majorityCount {
+						log.Printf("Got the voteCount %d which is greater than the majority count %d. Be a leader\n", voteCount, majorityCount)
 						rv.raftMember.SetSelfToLeader()
 						voteStatusChan <- Leader
 						return
@@ -101,6 +108,10 @@ func (rv *raftVoter) requestVote(member raftmember.Entry,
 	payload raftmodels.RequestVotePayload,
 	responseChan chan raftmodels.RequestVoteResponse,
 	errChan chan error) {
+	log.Println("Spawned go routine to request vote from member", member.ID)
+	defer func() {
+		log.Println("Exiting the request vote go routine")
+	}()
 	resp, err := sender.SendCommand(&payload, member.Address, member.Port)
 	if err != nil {
 		log.Println("unable to send vote request due to", err)
