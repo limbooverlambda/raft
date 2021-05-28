@@ -89,12 +89,13 @@ func (frs fakeRaftState) SetState(state raftstate.State) {
 }
 
 type fakeRaftTerm struct {
+	GetTermFn    func() int64
 	GetIncTermFn func() int64
 	raftterm.RaftTerm
 }
 
-func (fakeRaftTerm) GetTerm() int64 {
-	panic("implement me")
+func (frt fakeRaftTerm) GetTerm() int64 {
+	return frt.GetTermFn()
 }
 
 func (frt fakeRaftTerm) IncrementTerm() int64 {
