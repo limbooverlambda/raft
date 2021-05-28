@@ -25,7 +25,6 @@ type follower struct {
 
 func (f *follower) Run(ctx context.Context) {
 	log.Println("Setting state to Follower")
-	f.state.SetState(raftstate.FollowerState)
 	aeReqChan := f.aeRPC.RaftRpcReqChan()
 	voteReqChan := f.voteRPC.RaftRpcReqChan()
 	f.raftTimer.SetDeadline(time.Now())

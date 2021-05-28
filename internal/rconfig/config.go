@@ -5,7 +5,7 @@ import (
 )
 
 const PollDuration = 100 * time.Millisecond
-const IdleTimeout = 8000 * time.Millisecond
+const IdleTimeout = 2000 * time.Millisecond
 const MaxPacketDelayMs = 10000
 const MinPacketDelayMs = 4000
 

@@ -1,6 +1,7 @@
 package term
 
 import (
+	"log"
 	"sync"
 )
 
@@ -28,5 +29,6 @@ func (rt *raftTerm) IncrementTerm() int64 {
 	rt.Lock()
 	defer rt.Unlock()
 	rt.term += 1
+	log.Println("Incremented term to", rt.term)
 	return rt.term
 }

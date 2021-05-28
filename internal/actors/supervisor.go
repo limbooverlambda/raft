@@ -44,7 +44,7 @@ loop:
 			case rstate.CandidateState:
 				rs.runCandidate(ctx)
 			case rstate.LeaderState:
-				rs.runLeader()
+				rs.runLeader(ctx)
 			case rstate.ShutdownState:
 				rs.shutdown()
 				break loop
@@ -57,9 +57,9 @@ func (rs *raftSupervisor) shutdown() {
 	log.Println("Shutdown, relooping")
 }
 
-func (rs *raftSupervisor) runLeader() {
+func (rs *raftSupervisor) runLeader(ctx context.Context) {
 	leader := rs.leaderProvider.Provide()
-	leader.Run()
+	leader.Run(ctx)
 }
 
 func (rs *raftSupervisor) runCandidate(ctx context.Context) {
