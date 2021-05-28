@@ -16,6 +16,7 @@ var clientCmd = &cobra.Command{
 	Use:   "clientcmd",
 	Short: "Send client requests to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
+		sender := raftsender.NewRaftRequestSender()
 		ip, _ := cmd.Flags().GetString("ip")
 		port, _ := cmd.Flags().GetString("port")
 		payload, _ := cmd.Flags().GetString("payload")
@@ -24,7 +25,7 @@ var clientCmd = &cobra.Command{
 		clientCommand := &raftmodels.ClientCommandPayload{
 			ClientCommand: []byte(payload),
 		}
-		raftsender.SendCommand(clientCommand, ip, port)
+		sender.SendCommand(clientCommand, ip, port)
 	},
 }
 
@@ -32,6 +33,7 @@ var appendEntryCmd = &cobra.Command{
 	Use:   "aecmd",
 	Short: "Send append entry requests to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
+		sender := raftsender.NewRaftRequestSender()
 		ip, _ := cmd.Flags().GetString("ip")
 		port, _ := cmd.Flags().GetString("port")
 		entries, _ := cmd.Flags().GetString("entries")
@@ -49,7 +51,7 @@ var appendEntryCmd = &cobra.Command{
 			Entries:      []byte(entries),
 			LeaderCommit: leaderCommit,
 		}
-		raftsender.SendCommand(aeCommand, ip, port)
+		sender.SendCommand(aeCommand, ip, port)
 	},
 }
 
@@ -57,6 +59,7 @@ var requestVoteCmd = &cobra.Command{
 	Use:   "votecmd",
 	Short: "Send request Vote to the raft server",
 	Run: func(cmd *cobra.Command, args []string) {
+		sender := raftsender.NewRaftRequestSender()
 		ip, _ := cmd.Flags().GetString("ip")
 		port, _ := cmd.Flags().GetString("port")
 		candidateID, _ := cmd.Flags().GetString("candidateid")
@@ -70,7 +73,7 @@ var requestVoteCmd = &cobra.Command{
 			LastLogIndex: lastLogIndex,
 			LastLogTerm:  lastLogTerm,
 		}
-		raftsender.SendCommand(command, ip, port)
+		sender.SendCommand(command, ip, port)
 	},
 }
 

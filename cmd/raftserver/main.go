@@ -76,11 +76,9 @@ func main() {
 
 func startServer(config rconfig.Config) {
 	fmt.Println("Starting raft...")
-	//Initializing the service locator
-	svcLocator := locator.NewServiceLocator(config)
-
 	ctxt, _ := context.WithCancel(context.Background())
-
+	//Initializing the service locator
+	svcLocator := locator.NewServiceLocator(ctxt, config)
 	//Initializing the RaftSupervisor
 	raftSupervisor := actors.NewRaftSupervisor(svcLocator)
 	go func() { raftSupervisor.Start(ctxt) }()

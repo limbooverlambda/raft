@@ -1,9 +1,10 @@
 package appendentry
 
 import (
+	"context"
 	raftlog "github.com/kitengo/raft/internal/log"
 	"github.com/kitengo/raft/internal/models"
-	client "github.com/kitengo/raft/internal/sender"
+	raftsender "github.com/kitengo/raft/internal/sender"
 	"log"
 	"time"
 )
@@ -31,76 +32,107 @@ type Entry struct {
 }
 
 //Sender
-//TODO: If there is a change in leadership, the go routine will be terminated. Add context for that
+// Used to send appendEntry RPCs to the peers
 type Sender interface {
 	ForwardEntry(entry Entry)
 }
 
-func NewSender(raftLog raftlog.RaftLog) Sender {
+func NewSender(ctxt context.Context, raftSender raftsender.RequestSender, raftLog raftlog.RaftLog) Sender {
 	bufferChan := make(chan Entry, 100)
-	go senderSiphon(raftLog, bufferChan)
+	go senderSiphon(ctxt, raftSender, raftLog, bufferChan)
 	return &sender{
 		bufferChan: bufferChan,
 	}
 }
 
-func senderSiphon(raftLog raftlog.RaftLog, bufferChan chan Entry) {
-	for entry := range bufferChan {
-		entry := entry
-		go func() {
-			var err error
-			defer func() {
-				if err != nil {
-					delayedAction(time.Second, func() {
+func senderSiphon(ctxt context.Context, raftSender raftsender.RequestSender, raftLog raftlog.RaftLog, bufferChan chan Entry) {
+	cctxt, cancel := context.WithCancel(ctxt)
+	for {
+		select {
+		case <-ctxt.Done():
+			log.Println("Terminating the child routines")
+			cancel()
+			return
+		case entry := <-bufferChan:
+			go sendAppendEntryReq(cctxt, bufferChan, entry, raftSender, raftLog)
+		}
+	}
+}
+
+func sendAppendEntryReq(ctxt context.Context, bufferChan chan Entry, entry Entry, raftSender raftsender.RequestSender, raftLog raftlog.RaftLog) {
+	select {
+	case <-ctxt.Done():
+		log.Println("Cancelling the child sender and closing the response channel")
+		close(entry.RespChan)
+		return
+	default:
+		var err error
+		defer func() {
+			if err != nil {
+				delayedAction(time.Second, func() {
+					log.Println("failed send, retry")
+					select {
+					case <-ctxt.Done():
+						{
+							log.Println("context cancelled, no bufferring needed")
+							close(entry.RespChan)
+						}
+					default:
+						log.Println("buffering the failure")
 						bufferChan <- entry
-					})
-				}
-			}()
-			log.Printf("Forwarding entry to peer %v\n", entry)
-			aePayload := models.AppendEntryPayload{
-				Term:         entry.Term,
-				LeaderId:     entry.LeaderID,
-				PrevLogIndex: entry.PrevLogIndex,
-				PrevLogTerm:  entry.PrevLogTerm,
-				Entries:      entry.Entries,
-				LeaderCommit: entry.LeaderCommit,
+					}
+				})
 			}
-			resp, err := client.SendCommand(&aePayload, entry.MemberAddr, entry.MemberPort)
-			if err != nil {
-				//Requeue the entry back into the buffer channel
-				log.Printf("Unable to send AppendEntry request, retrying")
-				return
-			}
-			var aeResp models.AppendEntryResponse
-			err = aeResp.FromPayload(resp.Payload)
-			if err != nil {
-				log.Printf("Unable to decode AppendEntry response, retrying")
-				return
-			}
-			if !aeResp.Success {
-				//Append failed, decrement the index and retry
-				nextIndex := entry.PrevLogIndex - 1
-				nextEntry, err := raftLog.GetLogEntryAtIndex(nextIndex)
-				if err != nil {
-					log.Printf("Unable to AppendEntry after decrementing index, retrying")
-					return
-				}
-				modifiedEntry := Entry{
-					MemberID:     entry.MemberID,
-					RespChan:     entry.RespChan,
-					Term:         entry.Term,
-					LeaderID:     entry.LeaderID,
-					PrevLogIndex: nextEntry.Index,
-					PrevLogTerm:  int64(nextEntry.Term),
-					Entries:      nextEntry.Payload,
-					LeaderCommit: entry.LeaderCommit,
-					MemberAddr:   entry.MemberAddr,
-				}
-				bufferChan <- modifiedEntry
-				return
-			}
-			entry.RespChan <- aeResp
 		}()
+		log.Printf("Forwarding entry to peer %v\n", entry)
+		aePayload := models.AppendEntryPayload{
+			Term:         entry.Term,
+			LeaderId:     entry.LeaderID,
+			PrevLogIndex: entry.PrevLogIndex,
+			PrevLogTerm:  entry.PrevLogTerm,
+			Entries:      entry.Entries,
+			LeaderCommit: entry.LeaderCommit,
+		}
+		resp, err := raftSender.SendCommand(&aePayload, entry.MemberAddr, entry.MemberPort)
+		if err != nil {
+			//Requeue the entry back into the buffer channel
+			log.Printf("Unable to send AppendEntry request, retrying")
+			return
+		}
+		var aeResp models.AppendEntryResponse
+		err = aeResp.FromPayload(resp.Payload)
+		if err != nil {
+			log.Printf("Unable to decode AppendEntry response, retrying")
+			return
+		}
+		if !aeResp.Success {
+			//Append failed, decrement the index and retry
+			nextIndex := entry.PrevLogIndex - 1
+			nextEntry, err := raftLog.GetLogEntryAtIndex(nextIndex)
+			if err != nil {
+				log.Printf("Unable to AppendEntry after decrementing index, retrying")
+				return
+			}
+			modifiedEntry := Entry{
+				MemberID:     entry.MemberID,
+				RespChan:     entry.RespChan,
+				Term:         entry.Term,
+				LeaderID:     entry.LeaderID,
+				PrevLogIndex: nextEntry.Index,
+				PrevLogTerm:  int64(nextEntry.Term),
+				Entries:      nextEntry.Payload,
+				LeaderCommit: entry.LeaderCommit,
+				MemberAddr:   entry.MemberAddr,
+			}
+			log.Println("Sending modified entry")
+			sendToChan(ctxt, func() {
+				bufferChan <- modifiedEntry
+			})
+		}
+		log.Println("Sending response over channel")
+		sendToChan(ctxt, func() {
+			entry.RespChan <- aeResp
+		})
 	}
 }
 
@@ -117,4 +149,16 @@ type sender struct {
 
 func (s *sender) ForwardEntry(entry Entry) {
 	s.bufferChan <- entry
+}
+
+func sendToChan(ctx context.Context,
+	sendFn func(),
+) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		sendFn()
+		return
+	}
 }

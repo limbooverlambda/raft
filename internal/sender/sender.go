@@ -8,7 +8,17 @@ import (
 	"net"
 )
 
-func SendCommand(requestConv raftmodels.RequestConverter, ip, port string) (response raftmodels.Response, err error) {
+type RequestSender interface {
+	SendCommand(requestConv raftmodels.RequestConverter, ip, port string) (response raftmodels.Response, err error)
+}
+
+func NewRaftRequestSender() RequestSender {
+	return requestSender{}
+}
+
+type requestSender struct{}
+
+func (rs requestSender) SendCommand(requestConv raftmodels.RequestConverter, ip, port string) (response raftmodels.Response, err error) {
 	defer func() {
 		if err != nil {
 			log.Printf("Encountered error %v\n", err)

@@ -24,8 +24,10 @@ type RaftVoter interface {
 
 func NewRaftVoter(raftMember raftmember.RaftMember,
 	raftLog raftlog.RaftLog,
-	raftTerm raftterm.RaftTerm) RaftVoter {
+	raftTerm raftterm.RaftTerm,
+	raftSender sender.RequestSender) RaftVoter {
 	return &raftVoter{
+		raftSender: raftSender,
 		raftMember: raftMember,
 		raftLog:    raftLog,
 		raftTerm:   raftTerm,
@@ -33,6 +35,7 @@ func NewRaftVoter(raftMember raftmember.RaftMember,
 }
 
 type raftVoter struct {
+	raftSender sender.RequestSender
 	raftMember raftmember.RaftMember
 	raftLog    raftlog.RaftLog
 	raftTerm   raftterm.RaftTerm
@@ -112,7 +115,7 @@ func (rv *raftVoter) requestVote(member raftmember.Entry,
 	defer func() {
 		log.Println("Exiting the request vote go routine")
 	}()
-	resp, err := sender.SendCommand(&payload, member.Address, member.Port)
+	resp, err := rv.raftSender.SendCommand(&payload, member.Address, member.Port)
 	if err != nil {
 		log.Println("unable to send vote request due to", err)
 		errChan <- err

@@ -3,7 +3,7 @@ package heartbeat
 import (
 	raftmember "github.com/kitengo/raft/internal/member"
 	raftmodels "github.com/kitengo/raft/internal/models"
-	client "github.com/kitengo/raft/internal/sender"
+	raftsender "github.com/kitengo/raft/internal/sender"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftterm "github.com/kitengo/raft/internal/term"
 	"log"
@@ -23,11 +23,13 @@ type RaftHeartbeat interface {
 
 func NewRaftHeartbeat(raftTerm raftterm.RaftTerm,
 	raftMember raftmember.RaftMember,
-	raftIndex *raftstate.RaftIndex) RaftHeartbeat {
+	raftIndex *raftstate.RaftIndex,
+	raftSender raftsender.RequestSender) RaftHeartbeat {
 	return &raftHeartbeat{
 		raftMember: raftMember,
 		raftTerm:   raftTerm,
 		raftIndex:  raftIndex,
+		raftSender: raftSender,
 	}
 }
 
@@ -35,6 +37,7 @@ type raftHeartbeat struct {
 	raftMember raftmember.RaftMember
 	raftTerm   raftterm.RaftTerm
 	raftIndex  *raftstate.RaftIndex
+	raftSender raftsender.RequestSender
 }
 
 func (rhb *raftHeartbeat) SendHeartbeats() {
@@ -71,7 +74,7 @@ func (rhb *raftHeartbeat) sendHeartbeat(wg *sync.WaitGroup, member raftmember.En
 		LeaderId:     payload.LeaderID,
 		LeaderCommit: payload.LeaderCommit,
 	}
-	resp, err := client.SendCommand(&aePayload, member.Address, member.Port)
+	resp, err := rhb.raftSender.SendCommand(&aePayload, member.Address, member.Port)
 	if err != nil {
 		//Requeue the entry back into the buffer channel
 		log.Printf("Unable to send AppendEntry request %v\n", err)
