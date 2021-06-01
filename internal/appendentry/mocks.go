@@ -5,7 +5,9 @@ import (
 	"github.com/kitengo/raft/internal/models"
 )
 
-type fakeLog struct{}
+type fakeLog struct {
+	GetLogEntryAtIndexFn func(index uint64) (raftlog.Entry, error)
+}
 
 func (fakeLog) AppendEntry(entry raftlog.Entry) (raftlog.AppendEntryResponse, error) {
 	panic("implement me")
@@ -15,8 +17,8 @@ func (fakeLog) GetLogEntryMetaAtIndex(index uint64) (raftlog.EntryMeta, error) {
 	panic("implement me")
 }
 
-func (fakeLog) GetLogEntryAtIndex(index uint64) (raftlog.Entry, error) {
-	panic("implement me")
+func (fl fakeLog) GetLogEntryAtIndex(index uint64) (raftlog.Entry, error) {
+	return fl.GetLogEntryAtIndexFn(index)
 }
 
 func (fakeLog) TruncateFromIndex(index uint64) error {
