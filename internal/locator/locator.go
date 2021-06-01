@@ -1,6 +1,7 @@
 package locator
 
 import (
+	"context"
 	"fmt"
 	appendentrysender "github.com/kitengo/raft/internal/appendentry"
 	raftapplicator "github.com/kitengo/raft/internal/applicator"
@@ -9,6 +10,7 @@ import (
 	raftmember "github.com/kitengo/raft/internal/member"
 	"github.com/kitengo/raft/internal/rconfig"
 	raftrpc "github.com/kitengo/raft/internal/rpc"
+	raftsender "github.com/kitengo/raft/internal/sender"
 	raftstate "github.com/kitengo/raft/internal/state"
 	raftterm "github.com/kitengo/raft/internal/term"
 	rafttimer "github.com/kitengo/raft/internal/timer"
@@ -23,30 +25,38 @@ type ServiceLocator interface {
 	GetRaftVoter() raftvoter.RaftVoter
 	GetRaftMember() raftmember.RaftMember
 	GetRaftHeartbeat() raftheartbeat.RaftHeartbeat
+	GetRaftRequestSender() raftsender.RequestSender
 }
 
-func NewServiceLocator(config rconfig.Config) ServiceLocator {
+func NewServiceLocator(context context.Context, config rconfig.Config) ServiceLocator {
 	raftTerm := raftterm.NewRaftTerm()
 	raftMember := raftmember.NewRaftMember(config)
 	index := raftstate.NewRaftIndex()
 	raftLog := raftlog.NewRaftLog(fmt.Sprintf("log-%s", config.ServerID))
+	raftSender := raftsender.NewRaftRequestSender()
 	return &serviceLocator{
+		raftSender:    raftSender,
 		raftState:     raftstate.NewRaftState(),
 		raftTerm:      raftTerm,
-		raftVoter:     raftvoter.NewRaftVoter(raftMember, raftLog, raftTerm),
-		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(raftTerm, raftMember, index),
+		raftVoter:     raftvoter.NewRaftVoter(raftMember, raftLog, raftTerm, raftSender),
+		raftHeartbeat: raftheartbeat.NewRaftHeartbeat(raftTerm, raftMember, index, raftSender),
 		raftMember:    raftMember,
-		rpcLocator:    NewRpcLocator(raftTerm, raftMember, index, raftLog),
+		rpcLocator:    NewRpcLocator(context, raftTerm, raftMember, index, raftLog, raftSender),
 	}
 }
 
 type serviceLocator struct {
+	raftSender    raftsender.RequestSender
 	raftState     raftstate.RaftState
 	raftTerm      raftterm.RaftTerm
 	raftVoter     raftvoter.RaftVoter
 	raftHeartbeat raftheartbeat.RaftHeartbeat
 	raftMember    raftmember.RaftMember
 	rpcLocator    RpcLocator
+}
+
+func (sl *serviceLocator) GetRaftRequestSender() raftsender.RequestSender {
+	return sl.raftSender
 }
 
 func (sl *serviceLocator) GetRaftMember() raftmember.RaftMember {
@@ -83,12 +93,15 @@ type RpcLocator interface {
 	GetClientCommandSvc() raftrpc.RaftRpc
 }
 
-func NewRpcLocator(term raftterm.RaftTerm,
+func NewRpcLocator(
+	ctx context.Context,
+	term raftterm.RaftTerm,
 	raftMember raftmember.RaftMember,
 	raftIndex *raftstate.RaftIndex,
-	raftLog raftlog.RaftLog) RpcLocator {
+	raftLog raftlog.RaftLog,
+	raftSender raftsender.RequestSender) RpcLocator {
 
-	sender := appendentrysender.NewSender(raftLog)
+	sender := appendentrysender.NewSender(ctx, raftSender, raftLog)
 
 	raftApplicator := raftapplicator.NewRaftApplicator()
 	return &rpcLocator{
