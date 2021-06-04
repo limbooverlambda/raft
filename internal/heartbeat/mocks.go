@@ -23,8 +23,8 @@ func (frt fakeRaftTerm) IncrementTerm() int64 {
 type fakeRaftMember struct {
 	GetSetLeaderIDFn func(leaderID string)
 	GetSelfFn        func() member.Entry
-	GetLeaderFn func() member.Entry
-	GetListFn func() ([]member.Entry, error)
+	GetLeaderFn      func() member.Entry
+	GetListFn        func() ([]member.Entry, error)
 	member.RaftMember
 }
 
@@ -67,4 +67,3 @@ type fakeRaftSender struct {
 func (f fakeRaftSender) SendCommand(requestConv models.RequestConverter, ip, port string) (response models.Response, err error) {
 	return f.GetSendCommandFn(requestConv, ip, port)
 }
-

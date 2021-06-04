@@ -174,37 +174,37 @@ func (rl *raftLog) AppendEntry(entry Entry) (AppendEntryResponse, error) {
 	logPosition := rl.logSize
 	w, err := rl.logBuf.Write(entry.Payload)
 	if err != nil {
-		log.Printf("Failed to write payload %v\n",err)
+		log.Printf("Failed to write payload %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 	//Flush to the disc right away
 	err = rl.logBuf.Flush()
 	if err != nil {
-		log.Printf("Failed to flush logbuffer payload to disc %v\n",err)
+		log.Printf("Failed to flush logbuffer payload to disc %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 	rl.logSize += uint64(w)
 	//Add the position, term and payload size to the index
 	if err := binary.Write(rl.idxBuf, byteorder, logPosition); err != nil {
-		log.Printf("Failed to write log position to index %v\n",err)
+		log.Printf("Failed to write log position to index %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 
 	if err := binary.Write(rl.idxBuf, byteorder, entry.Term); err != nil {
-		log.Printf("Failed to write entry term to index %v\n",err)
+		log.Printf("Failed to write entry term to index %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 	//Need to cast to int32 since binary.Write will fail on data that doesn't have a fixed size
 	payloadSize := int32(len(entry.Payload))
 	if err := binary.Write(rl.idxBuf, byteorder, payloadSize); err != nil {
-		log.Printf("Failed to write payload size to index %v\n",err)
+		log.Printf("Failed to write payload size to index %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 
 	//Flush to the disc right away
 	err = rl.idxBuf.Flush()
 	if err != nil {
-		log.Printf("Failed to flush indexbuffer payload to disc %v\n",err)
+		log.Printf("Failed to flush indexbuffer payload to disc %v\n", err)
 		return AppendEntryResponse{}, err
 	}
 
