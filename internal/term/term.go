@@ -8,6 +8,7 @@ import (
 type RaftTerm interface {
 	GetTerm() int64
 	IncrementTerm() int64
+	SetTerm(term int64)
 }
 
 func NewRaftTerm() RaftTerm {
@@ -17,6 +18,12 @@ func NewRaftTerm() RaftTerm {
 type raftTerm struct {
 	sync.RWMutex
 	term int64
+}
+
+func (rt *raftTerm) SetTerm(term int64) {
+	rt.Lock()
+	defer rt.Unlock()
+	rt.term = term
 }
 
 func (rt *raftTerm) GetTerm() int64 {

@@ -9,6 +9,10 @@ type fakeLog struct {
 	GetLogEntryAtIndexFn func(index uint64) (raftlog.Entry, error)
 }
 
+func (fl fakeLog) GetCurrentLogIndex() uint64 {
+	panic("implement me")
+}
+
 func (fakeLog) AppendEntry(entry raftlog.Entry) (raftlog.AppendEntryResponse, error) {
 	panic("implement me")
 }

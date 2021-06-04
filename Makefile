@@ -14,6 +14,9 @@ RAFTCLIENT_PATH=$(BUILDPATH)/$(RAFTCLIENT)/
 
 LOG_FILE=log*
 
+test:
+	$(GOTEST)
+
 server:
 	cd $(RAFTSERVER_PATH);$(GOFMT);$(GOBUILD)
 
@@ -27,7 +30,7 @@ client-clean:
 	cd $(RAFTCLIENT_PATH);$(GOCLEAN)
 
 
-all: server client
+all: server client test
 
 clean-all: server-clean client-clean
 
