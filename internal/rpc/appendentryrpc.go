@@ -76,33 +76,45 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		log.Printf("Received heartbeat...")
 		return models.AppendEntryResponse{
 			Term:    appendEntryMeta.Term,
-			Success: false,
+			Success: true,
 		}, nil
 	}
 
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex
 	//    whose term matches prevLogTerm (§5.3)
-	prevLogIndex := appendEntryMeta.PrevLogIndex
-	em, err := ra.raftLog.GetLogEntryMetaAtIndex(prevLogIndex)
-	if err != nil {
-		log.Printf("Encountered error while querying log for index %v\n", prevLogIndex)
-		return nil, err
-	}
-	if int64(em.Term) != appendEntryMeta.PrevLogTerm {
-		// 3. If an existing entry conflicts with a new one (same index
-		//    but different terms), delete the existing entry and all that
-		//    follow it (§5.3)
-		err := ra.raftLog.TruncateFromIndex(prevLogIndex)
+	incomingLogIndex := appendEntryMeta.PrevLogIndex
+	currentLogIndex := ra.raftLog.GetCurrentLogIndex()
+
+	incomingLogTerm := appendEntryMeta.Term
+	currentLogTerm := currentTerm
+	if (incomingLogIndex != currentLogIndex) || (incomingLogTerm != currentLogTerm) {
+		log.Printf("Log mismatch incomingLogIndex %d currentLogIndex %d\n", incomingLogIndex, currentLogIndex)
+		log.Printf("Log mismatch incomingLogTerm %d currentLogTerm %d\n", incomingLogTerm, currentLogTerm)
+		em, err := ra.raftLog.GetLogEntryMetaAtIndex(incomingLogIndex)
 		if err != nil {
-			log.Printf("Encountered error while truncating log")
+			log.Printf("Encountered error while querying log for index %d: %v\n", incomingLogIndex, err)
+			return nil, err
 		}
-		return models.AppendEntryResponse{Term: appendEntryMeta.Term, Success: false}, nil
+		if int64(em.Term) != appendEntryMeta.PrevLogTerm {
+			// 3. If an existing entry conflicts with a new one (same index
+			//    but different terms), delete the existing entry and all that
+			//    follow it (§5.3)
+			err := ra.raftLog.TruncateFromIndex(incomingLogIndex)
+			if err != nil {
+				log.Printf("Encountered error while truncating log")
+			}
+			return models.AppendEntryResponse{Term: appendEntryMeta.Term, Success: false}, nil
+		}
 	}
 	// 4. Append any new entries not already in the log
 	resp, err := ra.raftLog.AppendEntry(raftlog.Entry{
 		Term:    uint64(appendEntryMeta.Term),
 		Payload: appendEntryMeta.Entries,
 	})
+	if err != nil {
+		log.Printf("unable to append entry to log due to %v\n", err)
+		return nil, err
+	}
 	// 5. If leaderCommit > commitIndex, set commitIndex =
 	//     min(leaderCommit, index of last new entry)
 	leaderCommit := appendEntryMeta.LeaderCommit
