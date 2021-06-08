@@ -9,10 +9,10 @@ import (
 )
 
 type AppendEntry struct {
-	Term         int64
+	Term         uint64
 	LeaderId     string
 	PrevLogIndex uint64
-	PrevLogTerm  int64
+	PrevLogTerm  uint64
 	Entries      []byte
 	LeaderCommit uint64
 	RespChan     chan<- RaftRpcResponse
@@ -28,10 +28,10 @@ func (a AppendEntry) GetErrorChan() chan<- error {
 }
 
 type AppendEntryMeta struct {
-	Term         int64
+	Term         uint64
 	LeaderId     string
 	PrevLogIndex uint64
-	PrevLogTerm  int64
+	PrevLogTerm  uint64
 	Entries      []byte
 	LeaderCommit uint64
 }
@@ -83,23 +83,26 @@ func (ra *raftAppendEntry) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex
 	//    whose term matches prevLogTerm (§5.3)
 	incomingLogIndex := appendEntryMeta.PrevLogIndex
-	currentLogIndex := ra.raftLog.GetCurrentLogIndex()
+	logEntryMeta, err := ra.raftLog.LogEntryMeta(incomingLogIndex)
+	if err != nil {
+		log.Printf("Encountered error while querying log for index %d: %v\n", incomingLogIndex, err)
+		return nil, err
+	}
 
 	incomingLogTerm := appendEntryMeta.Term
-	currentLogTerm := currentTerm
-	if (incomingLogIndex != currentLogIndex) || (incomingLogTerm != currentLogTerm) {
-		log.Printf("Log mismatch incomingLogIndex %d currentLogIndex %d\n", incomingLogIndex, currentLogIndex)
+	currentLogTerm := logEntryMeta.Term
+	if incomingLogTerm != currentLogTerm {
 		log.Printf("Log mismatch incomingLogTerm %d currentLogTerm %d\n", incomingLogTerm, currentLogTerm)
-		em, err := ra.raftLog.GetLogEntryMetaAtIndex(incomingLogIndex)
+		em, err := ra.raftLog.LogEntryMeta(incomingLogIndex)
 		if err != nil {
 			log.Printf("Encountered error while querying log for index %d: %v\n", incomingLogIndex, err)
 			return nil, err
 		}
-		if int64(em.Term) != appendEntryMeta.PrevLogTerm {
+		if em.Term != appendEntryMeta.PrevLogTerm {
 			// 3. If an existing entry conflicts with a new one (same index
 			//    but different terms), delete the existing entry and all that
 			//    follow it (§5.3)
-			err := ra.raftLog.TruncateFromIndex(incomingLogIndex)
+			err := ra.raftLog.Truncate(incomingLogIndex)
 			if err != nil {
 				log.Printf("Encountered error while truncating log")
 			}

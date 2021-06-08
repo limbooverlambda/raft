@@ -98,7 +98,7 @@ func (c *candidate) Run(ctx context.Context) {
 
 }
 
-func (c *candidate) checkForExceededDeadline(tick time.Time, term int64) <-chan raftvoter.VoteStatus {
+func (c *candidate) checkForExceededDeadline(tick time.Time, term uint64) <-chan raftvoter.VoteStatus {
 	if tick.After(c.raftTimer.GetDeadline()) {
 		term = c.term.IncrementTerm()
 		reqVoteChan := c.voter.RequestVote(term)
@@ -124,7 +124,7 @@ func (c *candidate) processVoteReq(voteReq raftrpc.RaftRpcRequest) {
 	}
 }
 
-func (c *candidate) processAERequest(req raftrpc.RaftRpcRequest) (term int64, leaderID string, err error) {
+func (c *candidate) processAERequest(req raftrpc.RaftRpcRequest) (term uint64, leaderID string, err error) {
 	respChan, errChan := req.GetResponseChan(), req.GetErrorChan()
 	aeReq := req.(raftrpc.AppendEntry)
 	aeMeta := raftrpc.AppendEntryMeta{
