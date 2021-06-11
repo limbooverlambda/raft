@@ -89,25 +89,25 @@ func (frs fakeRaftState) SetState(state raftstate.State) {
 }
 
 type fakeRaftTerm struct {
-	GetTermFn    func() int64
-	GetIncTermFn func() int64
+	GetTermFn    func() uint64
+	GetIncTermFn func() uint64
 	raftterm.RaftTerm
 }
 
-func (frt fakeRaftTerm) GetTerm() int64 {
+func (frt fakeRaftTerm) GetTerm() uint64 {
 	return frt.GetTermFn()
 }
 
-func (frt fakeRaftTerm) IncrementTerm() int64 {
+func (frt fakeRaftTerm) IncrementTerm() uint64 {
 	return frt.GetIncTermFn()
 }
 
 type fakeRaftVoter struct {
-	GetRequestVoteFn func(term int64) <-chan raftvoter.VoteStatus
+	GetRequestVoteFn func(term uint64) <-chan raftvoter.VoteStatus
 	raftvoter.RaftVoter
 }
 
-func (frv fakeRaftVoter) RequestVote(term int64) <-chan raftvoter.VoteStatus {
+func (frv fakeRaftVoter) RequestVote(term uint64) <-chan raftvoter.VoteStatus {
 	return frv.GetRequestVoteFn(term)
 }
 
@@ -308,7 +308,7 @@ func getFakeRaftTimer() fakeRaftTimer {
 
 func getFakeRaftVoter(voteStatuses chan raftvoter.VoteStatus) fakeRaftVoter {
 	return fakeRaftVoter{
-		GetRequestVoteFn: func(term int64) <-chan raftvoter.VoteStatus {
+		GetRequestVoteFn: func(term uint64) <-chan raftvoter.VoteStatus {
 			return voteStatuses
 		},
 	}
@@ -316,7 +316,7 @@ func getFakeRaftVoter(voteStatuses chan raftvoter.VoteStatus) fakeRaftVoter {
 
 func getFakeRaftTerm() fakeRaftTerm {
 	return fakeRaftTerm{
-		GetIncTermFn: func() int64 {
+		GetIncTermFn: func() uint64 {
 			return 1
 		},
 	}

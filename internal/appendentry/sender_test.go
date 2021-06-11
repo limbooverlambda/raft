@@ -75,7 +75,6 @@ func TestNewSender_WithFailureToAppend(t *testing.T) {
 	fLog.GetLogEntryAtIndexFn = func(index uint64) (raftlog.Entry, error) {
 		decrementLogIndex++
 		return raftlog.Entry{
-			Index:   0,
 			Term:    0,
 			Payload: nil,
 		}, nil

@@ -21,10 +21,10 @@ import (
 type Entry struct {
 	MemberID     string
 	RespChan     chan<- models.AppendEntryResponse
-	Term         int64
+	Term         uint64
 	LeaderID     string
 	PrevLogIndex uint64
-	PrevLogTerm  int64
+	PrevLogTerm  uint64
 	Entries      []byte
 	LeaderCommit uint64
 	MemberAddr   string
@@ -108,7 +108,7 @@ func sendAppendEntryReq(ctxt context.Context, bufferChan chan Entry, entry Entry
 		if !aeResp.Success {
 			//Append failed, decrement the index and retry
 			nextIndex := entry.PrevLogIndex - 1
-			nextEntry, err := raftLog.GetLogEntryAtIndex(nextIndex)
+			nextEntry, err := raftLog.LogEntry(nextIndex)
 			if err != nil {
 				log.Printf("Unable to AppendEntry after decrementing index, retrying")
 				return
@@ -118,8 +118,8 @@ func sendAppendEntryReq(ctxt context.Context, bufferChan chan Entry, entry Entry
 				RespChan:     entry.RespChan,
 				Term:         entry.Term,
 				LeaderID:     entry.LeaderID,
-				PrevLogIndex: nextEntry.Index,
-				PrevLogTerm:  int64(nextEntry.Term),
+				PrevLogIndex: nextIndex,
+				PrevLogTerm:  nextEntry.Term,
 				Entries:      nextEntry.Payload,
 				LeaderCommit: entry.LeaderCommit,
 				MemberAddr:   entry.MemberAddr,

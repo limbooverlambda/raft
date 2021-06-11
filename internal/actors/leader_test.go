@@ -75,7 +75,7 @@ func Test_leader_Run_AppendEntryReq(t *testing.T) {
 	lStub.raftTimer.GetIdleTimoutFn = func() time.Time {
 		return time.Now()
 	}
-	lStub.raftTerm.GetTermFn = func() int64 {
+	lStub.raftTerm.GetTermFn = func() uint64 {
 		return 0
 	}
 	lStub.aeRPC.GetProcessFn = func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {
@@ -139,7 +139,7 @@ func Test_leader_Run_ProcessVoteRequest(t *testing.T) {
 	lStub.raftTimer.GetIdleTimoutFn = func() time.Time {
 		return time.Now()
 	}
-	lStub.raftTerm.GetTermFn = func() int64 {
+	lStub.raftTerm.GetTermFn = func() uint64 {
 		return 0
 	}
 	lStub.voteRPC.GetProcessFn = func(meta raftrpc.RaftRpcMeta) (raftrpc.RaftRpcResponse, error) {

@@ -9,10 +9,10 @@ import (
 )
 
 type RequestVote struct {
-	Term         int64
+	Term         uint64
 	CandidateId  string
-	LastLogIndex int64
-	LastLogTerm  int64
+	LastLogIndex uint64
+	LastLogTerm  uint64
 	RespChan     chan<- RaftRpcResponse
 	ErrorChan    chan<- error
 }
@@ -26,14 +26,14 @@ func (a RequestVote) GetErrorChan() chan<- error {
 }
 
 type RequestVoteMeta struct {
-	Term         int64
+	Term         uint64
 	CandidateId  string
-	LastLogIndex int64
-	LastLogTerm  int64
+	LastLogIndex uint64
+	LastLogTerm  uint64
 }
 
 type RequestVoteResponse struct {
-	Term        int64
+	Term        uint64
 	VoteGranted bool
 }
 
@@ -82,7 +82,10 @@ func (rrV raftRequestVote) Process(meta RaftRpcMeta) (RaftRpcResponse, error) {
 		return RequestVoteResponse{Term: currentTerm, VoteGranted: false}, nil
 	}
 	votedFor := rrV.raftMember.VotedFor()
-	isLogUptoDate := rrV.isLogUptoDate(requestVoteMeta)
+	isLogUptoDate, err := rrV.isLogUptoDate(requestVoteMeta)
+	if err != nil {
+		return nil, err
+	}
 	didIVote := votedFor == "" || votedFor == requestVoteMeta.CandidateId
 	if didIVote && isLogUptoDate {
 		log.Printf("Accepting the vote from %+v\n", requestVoteMeta)
@@ -111,15 +114,18 @@ func (rrV raftRequestVote) ReceiveRequestVote(requestVote RequestVote) {
 //the log with the later term is more up-to-date. If the logs
 //end with the same term, then whichever log is longer is
 //more up-to-date.
-func (rrV raftRequestVote) isLogUptoDate(meta RequestVoteMeta) bool {
-	entryMeta := rrV.raftLog.GetCurrentLogEntry()
-	currentTerm := int64(entryMeta.Term)
-	currentIndex := int64(entryMeta.Index)
+func (rrV raftRequestVote) isLogUptoDate(meta RequestVoteMeta) (bool, error) {
+	entryMeta, err := rrV.raftLog.LastLogEntryMeta()
+	if err != nil {
+		return false, err
+	}
+	currentTerm := entryMeta.Term
+	currentIndex := entryMeta.LogIndex
 	if currentTerm < meta.LastLogTerm {
-		return true
+		return true, nil
 	}
 	if currentTerm == meta.LastLogTerm {
-		return meta.LastLogIndex >= currentIndex
+		return meta.LastLogIndex >= currentIndex, nil
 	}
-	return false
+	return false, nil
 }

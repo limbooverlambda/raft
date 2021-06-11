@@ -19,7 +19,7 @@ const (
 )
 
 type RaftVoter interface {
-	RequestVote(term int64) <-chan VoteStatus
+	RequestVote(term uint64) <-chan VoteStatus
 }
 
 func NewRaftVoter(raftMember raftmember.RaftMember,
@@ -41,17 +41,21 @@ type raftVoter struct {
 	raftTerm   raftterm.RaftTerm
 }
 
-func (rv *raftVoter) RequestVote(term int64) <-chan VoteStatus {
+func (rv *raftVoter) RequestVote(term uint64) <-chan VoteStatus {
 	log.Println("Requesting vote for term", term)
 	voteStatusChan := make(chan VoteStatus, 1)
 	candidateID := rv.raftMember.Self().ID
-	lastLogEntryMeta := rv.raftLog.GetCurrentLogEntry()
+	lastLogEntryMeta, err := rv.raftLog.LastLogEntryMeta()
+	if err != nil {
+		log.Println("Unable to retrieve the most recent log information, closing vote channel", err)
+		close(voteStatusChan)
+	}
 	//Create the RequestVote payload
 	requestVotePayload := raftmodels.RequestVotePayload{
 		Term:         term,
 		CandidateId:  candidateID,
-		LastLogIndex: int64(lastLogEntryMeta.Index),
-		LastLogTerm:  int64(lastLogEntryMeta.Term),
+		LastLogIndex: lastLogEntryMeta.LogIndex,
+		LastLogTerm:  lastLogEntryMeta.Term,
 	}
 	members, err := rv.raftMember.List()
 	if err != nil {

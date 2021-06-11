@@ -7,16 +7,16 @@ import (
 )
 
 type fakeRaftTerm struct {
-	GetTermFn    func() int64
-	GetIncTermFn func() int64
+	GetTermFn    func() uint64
+	GetIncTermFn func() uint64
 	raftterm.RaftTerm
 }
 
-func (frt fakeRaftTerm) GetTerm() int64 {
+func (frt fakeRaftTerm) GetTerm() uint64 {
 	return frt.GetTermFn()
 }
 
-func (frt fakeRaftTerm) IncrementTerm() int64 {
+func (frt fakeRaftTerm) IncrementTerm() uint64 {
 	return frt.GetIncTermFn()
 }
 

@@ -27,10 +27,10 @@ type RequestConverter interface {
 }
 
 type AppendEntryPayload struct {
-	Term         int64
+	Term         uint64
 	LeaderId     string
 	PrevLogIndex uint64
-	PrevLogTerm  int64
+	PrevLogTerm  uint64
 	Entries      []byte
 	LeaderCommit uint64
 }
@@ -40,10 +40,10 @@ func (aep *AppendEntryPayload) ToRequest() (Request, error) {
 }
 
 type RequestVotePayload struct {
-	Term         int64
+	Term         uint64
 	CandidateId  string
-	LastLogIndex int64
-	LastLogTerm  int64
+	LastLogIndex uint64
+	LastLogTerm  uint64
 }
 
 func (rvp *RequestVotePayload) ToRequest() (Request, error) {
@@ -59,7 +59,7 @@ func (ccp *ClientCommandPayload) ToRequest() (Request, error) {
 }
 
 type AppendEntryResponse struct {
-	Term    int64
+	Term    uint64
 	Success bool
 }
 
@@ -69,7 +69,7 @@ func (aer *AppendEntryResponse) FromPayload(payload []byte) error {
 }
 
 type RequestVoteResponse struct {
-	Term        int64
+	Term        uint64
 	VoteGranted bool
 }
 

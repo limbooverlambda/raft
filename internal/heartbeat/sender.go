@@ -12,7 +12,7 @@ import (
 
 type Payload struct {
 	MemberID     string
-	Term         int64
+	Term         uint64
 	LeaderID     string
 	LeaderCommit uint64
 }

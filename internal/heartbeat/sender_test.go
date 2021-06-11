@@ -9,7 +9,7 @@ import (
 
 func Test_raftHeartbeat_SendHeartbeats(t *testing.T) {
 	fakeTerm := fakeRaftTerm{}
-	fakeTerm.GetTermFn = func() int64 {
+	fakeTerm.GetTermFn = func() uint64 {
 		return 1
 	}
 	fakeMember := fakeRaftMember{}

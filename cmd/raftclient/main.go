@@ -39,9 +39,9 @@ var appendEntryCmd = &cobra.Command{
 		entries, _ := cmd.Flags().GetString("entries")
 		leaderID, _ := cmd.Flags().GetString("leaderid")
 		prevLogIndex, _ := cmd.Flags().GetUint64("prevlogindex")
-		prevLogTerm, _ := cmd.Flags().GetInt64("prevlogterm")
+		prevLogTerm, _ := cmd.Flags().GetUint64("prevlogterm")
 		leaderCommit, _ := cmd.Flags().GetUint64("leadercommit")
-		term, _ := cmd.Flags().GetInt64("term")
+		term, _ := cmd.Flags().GetUint64("term")
 		fmt.Println("Sending ae command")
 		aeCommand := &raftmodels.AppendEntryPayload{
 			Term:         term,
@@ -63,9 +63,9 @@ var requestVoteCmd = &cobra.Command{
 		ip, _ := cmd.Flags().GetString("ip")
 		port, _ := cmd.Flags().GetString("port")
 		candidateID, _ := cmd.Flags().GetString("candidateid")
-		lastLogIndex, _ := cmd.Flags().GetInt64("lastlogindex")
-		lastLogTerm, _ := cmd.Flags().GetInt64("lastlogterm")
-		term, _ := cmd.Flags().GetInt64("term")
+		lastLogIndex, _ := cmd.Flags().GetUint64("lastlogindex")
+		lastLogTerm, _ := cmd.Flags().GetUint64("lastlogterm")
+		term, _ := cmd.Flags().GetUint64("term")
 		fmt.Println("Sending vote command")
 		command := &raftmodels.RequestVotePayload{
 			Term:         term,
