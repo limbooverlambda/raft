@@ -19,14 +19,14 @@ const (
 	ErrEmptyPayloadAppend = rafterror.Error("cannot append empty payload")
 	ErrIllegalIndex       = rafterror.Error("cannot read from index")
 	ErrReadingFromLog     = rafterror.Error("unable to read from log file")
+	ErrReadingFromIndex   = rafterror.Error("unable to read from index file")
 	ErrWritingToLog       = rafterror.Error("unable to write to log file")
-	)
+)
 
 const (
 	recordLengthInBytes   = 8
 	metadataLengthInBytes = 24
 )
-
 
 type Entry struct {
 	Term    uint64
@@ -135,60 +135,94 @@ type raftLog struct {
 }
 
 func (rl *raftLog) AppendEntry(entry Entry) (EntryMeta, error) {
-		rl.Lock()
-		defer rl.Unlock()
-		if len(entry.Payload) == 0 {
-			return EntryMeta{}, ErrEmptyPayloadAppend
-		}
-		logPosition := rl.logSize
-	    entrySize, err := rl.writeToLog(entry.Payload)
-	    if err != nil {
-	    	return EntryMeta{}, err
-		}
-		rl.logSize += uint64(entrySize)
-		//Add the position, term and payload size to the index
-		index := Index{
-			Position:    logPosition,
-			Term:        entry.Term,
-			PayloadSize: uint64(entrySize),
-		}
-		_, err = rl.writeToIndex(index)
-		if err != nil {
-			return EntryMeta{}, err
-		}
+	rl.Lock()
+	defer rl.Unlock()
+	if len(entry.Payload) == 0 {
+		return EntryMeta{}, ErrEmptyPayloadAppend
+	}
+	logPosition := rl.logSize
+	entrySize, err := rl.writeToLog(entry.Payload)
+	if err != nil {
+		return EntryMeta{}, err
+	}
+	rl.logSize += uint64(entrySize)
+	//Add the position, term and payload size to the index
+	index := Index{
+		Position:    logPosition,
+		Term:        entry.Term,
+		PayloadSize: uint64(entrySize),
+	}
+	_, err = rl.writeToIndex(index)
+	if err != nil {
+		return EntryMeta{}, err
+	}
 
-		//prevLogTerm and prevLogIndex
-		prevLogTerm := rl.logTerm
-		prevLogIdx := rl.logIndex
+	//prevLogTerm and prevLogIndex
+	prevLogTerm := rl.logTerm
+	prevLogIdx := rl.logIndex
 
-		//Reset the log term and index
-		rl.logTerm = entry.Term
-		rl.logIndex = prevLogIdx + 1
+	//Reset the log term and index
+	rl.logTerm = entry.Term
+	rl.logIndex = prevLogIdx + 1
+	rl.idxSize = rl.idxSize + metadataLengthInBytes
 
-		return EntryMeta{
-			Term:         rl.logTerm,
-			LogIndex:     rl.logIndex,
-			PrevLogTerm:  prevLogTerm,
-			PrevLogIndex: prevLogIdx,
-			PayloadSize:  uint64(entrySize),
-		}, nil
+	return EntryMeta{
+		Term:         rl.logTerm,
+		LogIndex:     rl.logIndex,
+		PrevLogTerm:  prevLogTerm,
+		PrevLogIndex: prevLogIdx,
+		PayloadSize:  uint64(entrySize),
+	}, nil
 }
 
 func (rl *raftLog) Truncate(indexID uint64) error {
-	panic("implement me")
+	idxTruncationSize := rl.idxSize - (indexID-1)*metadataLengthInBytes
+	if err := rl.idxFile.Truncate(int64(idxTruncationSize)); err != nil {
+		return err
+	}
+	rl.idxSize = idxTruncationSize
+	rl.logIndex = indexID - 1
+	return nil
 }
 
 func (rl *raftLog) LogEntryMeta(index uint64) (EntryMeta, error) {
-	panic("implement me")
+	rl.RLock()
+	defer rl.RUnlock()
+	idx, err := rl.readFromIndex(index)
+	if err != nil {
+		return EntryMeta{}, err
+	}
+	return EntryMeta{
+		Term:         idx.Term,
+		LogIndex:     index,
+		PrevLogTerm:  0,
+		PrevLogIndex: 0,
+		PayloadSize:  idx.PayloadSize,
+	}, err
 }
 
-func (rl *raftLog) LogEntry(offset uint64) (Entry, error) {
-	panic("implement me")
+func (rl *raftLog) LogEntry(indexID uint64) (Entry, error) {
+	rl.RLock()
+	defer rl.RUnlock()
+	idx, err := rl.readFromIndex(indexID)
+	if err != nil {
+		return Entry{}, ErrReadingFromIndex
+	}
+	payload, err := rl.readFromLog(idx.Position, idx.PayloadSize)
+	if err != nil {
+		return Entry{}, ErrReadingFromLog
+	}
+	return Entry{
+		Term:    idx.Term,
+		Payload: payload,
+	}, nil
 }
 
 func (rl *raftLog) LastLogEntryMeta() (EntryMeta, error) {
-	lastIndex := rl.idxSize/metadataLengthInBytes
-	idx, err :=  rl.readFromIndex(lastIndex)
+	rl.RLock()
+	defer rl.RUnlock()
+	lastIndex := rl.idxSize / metadataLengthInBytes
+	idx, err := rl.readFromIndex(lastIndex)
 	if err != nil {
 		return EntryMeta{}, err
 	}
@@ -201,74 +235,10 @@ func (rl *raftLog) LastLogEntryMeta() (EntryMeta, error) {
 	}, err
 }
 
-//func (rl *raftLog) GetCurrentLogIndex() uint64 {
-//	return rl.logIndex
-//}
-//
-//func (rl *raftLog) GetCurrentLogEntry() EntryMeta {
-//	return EntryMeta{
-//		Index: rl.logIndex,
-//		Term:  rl.logTerm,
-//	}
-//}
-
-//func (rl *raftLog) GetLogEntryMetaAtIndex(index uint64) (EntryMeta, error) {
-//	rl.RLock()
-//	defer rl.RUnlock()
-//	metadataBytes := make([]byte, metadataLengthInBytes)
-//	offset := (index - 1) * metadataLengthInBytes
-//	_, err := rl.idxFile.ReadAt(metadataBytes, int64(offset))
-//	if err != nil {
-//		return EntryMeta{}, err
-//	}
-//	_, logTerm, _ := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),
-//		byteorder.Uint64(metadataBytes[recordLengthInBytes:recordLengthInBytes+8]),
-//		byteorder.Uint64(metadataBytes[recordLengthInBytes+8:recordLengthInBytes+16])
-//
-//	return EntryMeta{
-//		Index: index,
-//		Term:  logTerm,
-//		//PayloadSize: logPayloadSize,
-//	}, nil
-//}
-
-//func (rl *raftLog) GetLogEntryAtIndex(index uint64) (Entry, error) {
-//	rl.RLock()
-//	defer rl.RUnlock()
-//	idx, err := rl.readFromIndex(index)
-//	if err != nil {
-//		return Entry{}, err
-//	}
-//	payloadBytes := make([]byte, idx.PayloadSize)
-//	_, err = rl.logFile.ReadAt(payloadBytes, int64(idx.Position))
-//	if err != nil {
-//		return Entry{}, ErrReadingFromLog
-//	}
-//	return Entry{
-//		Term:    idx.Term,
-//		Payload: payloadBytes,
-//	}, nil
-//}
-//
-//func (rl *raftLog) TruncateFromIndex(index uint64) error {
-//	rl.Lock()
-//	defer rl.Unlock()
-//	idxTruncationSize := rl.idxSize - (index-1)*metadataLengthInBytes
-//	if err := rl.idxFile.Truncate(int64(idxTruncationSize)); err != nil {
-//		return err
-//	}
-//	rl.idxSize = idxTruncationSize
-//	rl.logIndex = index - 1
-//	return nil
-//}
-
-//func (rl *raftLog) AppendEntry(entry Entry) (AppendedEntry, error) {
-
-//}
 
 func (rl *raftLog) writeToLog(payload []byte) (entrySize int, err error) {
-	 if entrySize, err = rl.logBuf.Write(payload);err != nil {
-	 	return 0, ErrWritingToLog
+	if entrySize, err = rl.logBuf.Write(payload); err != nil {
+		return 0, ErrWritingToLog
 	}
 	if err = rl.logBuf.Flush(); err != nil {
 		return entrySize, ErrWritingToLog
@@ -277,19 +247,19 @@ func (rl *raftLog) writeToLog(payload []byte) (entrySize int, err error) {
 }
 
 func (rl *raftLog) readFromLog(readPosition uint64, payloadSize uint64) ([]byte, error) {
-		payloadBytes := make([]byte, int64(payloadSize))
-		_, err := rl.logFile.ReadAt(payloadBytes, int64(readPosition))
-		if err != nil && err != io.EOF{
-			return nil, ErrReadingFromLog
-		}
-		return payloadBytes, nil
+	payloadBytes := make([]byte, int64(payloadSize))
+	_, err := rl.logFile.ReadAt(payloadBytes, int64(readPosition))
+	if err != nil && err != io.EOF {
+		return nil, ErrReadingFromLog
+	}
+	return payloadBytes, nil
 }
 
 func (rl *raftLog) readFromIndex(indexID uint64) (Index, error) {
 	metadataBytes := make([]byte, metadataLengthInBytes)
 	offset := (indexID - 1) * metadataLengthInBytes
 	_, err := rl.idxFile.ReadAt(metadataBytes, int64(offset))
-	if err != nil && err != io.EOF{
+	if err != nil && err != io.EOF {
 		return Index{}, ErrIllegalIndex
 	}
 	logPosition, logTerm, logEntrySize := byteorder.Uint64(metadataBytes[0:recordLengthInBytes]),

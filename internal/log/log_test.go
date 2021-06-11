@@ -15,18 +15,38 @@ func TestRaftLog_AllOperations(t *testing.T) {
 			Term:    2,
 			Payload: []byte("world"),
 		},
-		{
-			Term:    3,
-			Payload: []byte("goodbye"),
-		},
 	}
 	l := NewRaftLog("allops_test")
+	defer func() {
+		deleteFile("allops_test")
+	}()
 	for _, entry := range entries {
 		l.AppendEntry(entry)
 	}
 	lastLogEntry, err :=  l.LastLogEntryMeta()
 	expectErr(t, err, nil)
-	equal(t, EntryMeta{}, lastLogEntry)
+	equal(t, uint64(2), lastLogEntry.LogIndex)
+
+	indexEntry, err := l.LogEntry(lastLogEntry.LogIndex)
+	expectErr(t, err, nil)
+	actualPayload := string(indexEntry.Payload)
+	equal(t, "world", actualPayload)
+
+	indexEntry, err = l.LogEntry(1)
+	expectErr(t, err, nil)
+	actualPayload = string(indexEntry.Payload)
+	equal(t, "Hello", actualPayload)
+
+	logEntryMeta, err :=  l.LogEntryMeta(1)
+	expectErr(t, err, nil)
+	equal(t, uint64(1), logEntryMeta.Term)
+
+	err = l.Truncate(2)
+	expectErr(t, err, nil)
+
+	logEntryMeta, err =  l.LastLogEntryMeta()
+	expectErr(t, err, nil)
+	equal(t, uint64(1), logEntryMeta.Term)
 }
 
 func TestRaftLog_AppendEntry(t *testing.T) {
