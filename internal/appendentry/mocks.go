@@ -29,27 +29,6 @@ func (fl fakeLog) Truncate(indexID uint64) error {
 	panic("implement me")
 }
 
-//func (fl fakeLog) GetCurrentLogIndex() uint64 {
-//	panic("implement me")
-//}
-//
-//
-//func (fakeLog) GetLogEntryMetaAtIndex(index uint64) (raftlog.EntryMeta, error) {
-//	panic("implement me")
-//}
-//
-//func (fl fakeLog) GetLogEntryAtIndex(index uint64) (raftlog.Entry, error) {
-//	return fl.GetLogEntryAtIndexFn(index)
-//}
-//
-//func (fakeLog) TruncateFromIndex(index uint64) error {
-//	panic("implement me")
-//}
-//
-//func (fakeLog) GetCurrentLogEntry() raftlog.EntryMeta {
-//	panic("implement me")
-//}
-
 type fakeSender struct {
 	GetSendCommandFn func(requestConv models.RequestConverter, ip, port string) (response models.Response, err error)
 }
